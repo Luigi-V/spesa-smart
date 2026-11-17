@@ -1,12 +1,12 @@
-// Spesa Smart - Service Worker (v7)
-const CACHE_NAME = 'spesa-smart-v8';
+// Spesa Smart - Service Worker (v10)
+const CACHE_NAME = 'spesa-smart-v10';
 
 const PRECACHE_URLS = [
   './',
   './index.html',
-  './css/style.css?v=8',
-  './js/db.js?v=8',
-  './js/app.js?v=8',
+  './css/style.css?v=10',
+  './js/db.js?v=10',
+  './js/app.js?v=10',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -27,8 +27,11 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve(false))));
+    const names = await caches.keys();
+    await Promise.all(names.map((name) => {
+      if (name !== CACHE_NAME) return caches.delete(name);
+      return Promise.resolve(false);
+    }));
     await self.clients.claim();
   })());
 });
