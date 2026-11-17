@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+
+<html lang="it">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
+<meta content="#059669" name="theme-color"/>
+<link href="./manifest.webmanifest" rel="manifest"/>
+<link href="./icons/icon-192.png" rel="icon"/>
+<link href="./css/style.css?v=7" rel="stylesheet"/>
+<title>Spesa Smart</title>
+</head>
+<body>
+<noscript>Questa app richiede JavaScript per funzionare.</noscript>
+<header class="topbar" role="banner">
+<div class="topbar__left">
+<div aria-hidden="true" class="appmark">
+<span class="appmark__dot"></span>
+<span class="appmark__name">Spesa Smart</span><span class="versionbadge">v7</span>
+</div>
+<div class="topbar__sub" id="monthSummary">Spesa del mese: —</div>
+</div>
+<button aria-label="Vai a Registra" class="iconbtn" id="btnQuickAdd" type="button">
+<span aria-hidden="true" class="icon">＋</span>
+</button>
+</header>
+<main class="main" id="main" role="main">
+<!-- Banner promemoria backup -->
+<section aria-live="polite" class="banner hidden" id="backupBanner">
+<div class="banner__text" id="backupBannerText">—</div>
+<div class="banner__actions">
+<button class="btn btn--primary" id="backupBannerDo">Fai backup ora</button>
+<button class="btn btn--ghost" id="backupBannerLater">Più tardi</button>
+</div>
+<button aria-label="Chiudi" class="iconbtn banner__close" id="backupBannerClose">✕</button>
+</section>
+<!-- Banner aggiornamento -->
+<section aria-live="polite" class="banner banner--info hidden" id="updateBanner">
+<div class="banner__text">Nuova versione disponibile.</div>
+<div class="banner__actions">
+<button class="btn btn--primary" id="btnUpdateNow">Aggiorna</button>
+</div>
+<button aria-label="Chiudi" class="iconbtn banner__close" id="btnUpdateDismiss">✕</button>
+</section>
+<section class="tab" data-tab="registra" id="tab-registra">
+<div class="pad">
+<!-- Single purchase form -->
+<form autocomplete="off" class="card form" id="singleForm">
+<h2 class="h2">Registra acquisto</h2>
+<label class="field">
+<span class="field__label">Prodotto</span>
+<input class="input" id="pProduct" list="dlProducts" maxlength="80" name="product" placeholder="Es. Latte intero" required=""/>
+<datalist id="dlProducts"></datalist>
+<div class="field__hint" id="productHint"></div>
+</label>
+<div class="grid2">
+<label class="field">
+<span class="field__label">Categoria</span>
+<select class="select" id="pCategory" name="category" required=""></select>
+</label>
+<label class="field">
+<span class="field__label">Negozio</span>
+<input class="input" id="pStore" list="dlStores" maxlength="60" name="store" placeholder="Es. Esselunga"/>
+<datalist id="dlStores"></datalist>
+</label>
+</div>
+<div class="grid3">
+<label class="field">
+<span class="field__label">Quantità</span>
+<input class="input" id="pQty" inputmode="decimal" name="qty" placeholder="1" required=""/>
+</label>
+<label class="field">
+<span class="field__label">Unità</span>
+<select class="select" id="pUnit" name="unit" required=""></select>
+</label>
+<label class="field">
+<span class="field__label">Prezzo totale (€)</span>
+<input class="input" id="pPrice" inputmode="decimal" name="price" placeholder="2,49" required=""/>
+</label>
+</div>
+<div class="grid2">
+<label class="field">
+<span class="field__label">Data</span>
+<input class="input" id="pDate" name="date" required="" type="date"/>
+</label>
+<label class="field">
+<span class="field__label">Marca (opzionale)</span>
+<input class="input" id="pBrand" maxlength="60" name="brand" placeholder="Es. Parmalat"/>
+</label>
+</div>
+<label class="field">
+<span class="field__label">Note (opzionale)</span>
+<textarea class="textarea" id="pNotes" maxlength="220" name="notes" placeholder="Es. in offerta, formato convenienza..." rows="2"></textarea>
+</label>
+<div class="row row--between">
+<div class="pill" id="unitPricePill">Prezzo unitario: —</div>
+<div class="badge hidden" id="priceBadge">—</div>
+</div>
+<div class="row">
+<button class="btn btn--primary" type="submit">Salva</button>
+<button class="btn btn--ghost" id="btnSingleReset" type="button">Pulisci</button>
+</div>
+</form>
+
+
+
+
+</div>
+
+<section class="card">
+<h2 class="h2">Ultimi acquisti</h2>
+<div class="list" id="lastPurchases"></div>
+</section>
+
+</section>
+<section class="tab hidden" data-tab="lista" id="tab-lista">
+<div class="pad">
+<section class="card">
+<h2 class="h2">Lista della spesa</h2>
+<div class="row row--between">
+<div aria-label="Filtro" class="chips" role="group">
+<button class="chip is-active" id="filterNeed" type="button">Solo da comprare</button>
+<button class="chip" id="filterAll" type="button">Tutti</button>
+</div>
+<button class="btn btn--ghost" id="btnShareList" type="button">Condividi lista</button>
+</div>
+<div class="counters" id="autoCounters"></div>
+<div class="list" id="shoppingAuto"></div>
+<hr class="sep"/>
+<h3 class="h3">Aggiungi voce manuale</h3>
+<form class="grid2" id="manualForm">
+<input class="input" id="mName" maxlength="80" placeholder="Nome prodotto" required=""/>
+<select class="select" id="mCategory" required=""></select>
+<button class="btn btn--primary" type="submit">Aggiungi</button>
+<button class="btn btn--ghost" id="btnClearChecked" type="button">Rimuovi spuntati</button>
+</form>
+<div class="list" id="shoppingManual"></div>
+</section>
+</div>
+</section>
+<section class="tab hidden" data-tab="storico" id="tab-storico">
+<div class="pad">
+<section class="card">
+<h2 class="h2">Storico</h2>
+<label class="field">
+<span class="field__label">Cerca</span>
+<input class="input" id="hSearch" maxlength="80" placeholder="Prodotto, marca, note..."/>
+</label>
+<div class="grid2">
+<label class="field">
+<span class="field__label">Categoria</span>
+<select class="select" id="hCategory"></select>
+</label>
+<label class="field">
+<span class="field__label">Negozio</span>
+<input class="input" id="hStore" list="dlStores" maxlength="60" placeholder="Tutti"/>
+</label>
+</div>
+<div class="grid2">
+<label class="field">
+<span class="field__label">Dal</span>
+<input class="input" id="hFrom" type="date"/>
+</label>
+<label class="field">
+<span class="field__label">Al</span>
+<input class="input" id="hTo" type="date"/>
+</label>
+</div>
+<div class="row">
+<button class="btn btn--primary" id="btnApplyHistory" type="button">Applica filtri</button>
+<button class="btn btn--ghost" id="btnResetHistory" type="button">Reset</button>
+</div>
+<div class="row row--between">
+<div class="pill" id="historyStats">—</div>
+<button class="btn btn--ghost" id="btnLoadMore" type="button">Mostra altri</button>
+</div>
+<div class="list" id="historyList"></div>
+</section>
+</div>
+</section>
+<section class="tab hidden" data-tab="analisi" id="tab-analisi">
+<div class="pad">
+<section class="card">
+<h2 class="h2">Analisi</h2>
+<label class="field">
+<span class="field__label">Prodotto</span>
+<input class="input" id="aProduct" list="dlProducts" maxlength="80" placeholder="Seleziona un prodotto"/>
+</label>
+<div class="statsgrid" id="productStats"></div>
+<div class="chartCard">
+<div class="chartTitle">Prezzo unitario nel tempo</div>
+<canvas class="chart" height="320" id="chartUnitPrice" width="640"></canvas>
+<div class="legend" id="legendStores"></div>
+</div>
+</section>
+<section class="card">
+<h2 class="h2">Spesa</h2>
+<div class="chartCard">
+<div class="chartTitle">Spesa mensile (ultimi 12 mesi)</div>
+<canvas class="chart" height="320" id="chartMonthly" width="640"></canvas>
+</div>
+<div class="chartCard">
+<div class="chartTitle">Spesa per categoria</div>
+<canvas class="chart" height="320" id="chartCategory" width="640"></canvas>
+</div>
+<div class="chartCard">
+<div class="chartTitle">Classifica negozi (totale speso)</div>
+<canvas class="chart" height="320" id="chartStores" width="640"></canvas>
+</div>
+<div class="chartCard">
+<div class="chartTitle">Top 10 prodotti più acquistati</div>
+<canvas class="chart" height="320" id="chartTopProducts" width="640"></canvas>
+</div>
+</section>
+</div>
+</section>
+<section class="tab hidden" data-tab="impostazioni" id="tab-impostazioni">
+<div class="pad">
+<section class="card">
+<h2 class="h2">Impostazioni</h2>
+<h3 class="h3">Backup</h3>
+<div class="row">
+<button class="btn btn--primary btn--wide" id="btnExportBackup" type="button">Esporta backup</button>
+<button class="btn btn--primary btn--wide" id="btnImportBackup" type="button">Importa backup</button>
+<input accept=".json,application/json" class="hidden" id="fileImport" type="file"/>
+</div>
+<div class="row">
+<button class="btn btn--ghost btn--wide" id="btnExportCSV" type="button">Esporta CSV</button>
+</div>
+<div class="small muted" id="backupInfo">—</div>
+<hr class="sep"/>
+<h3 class="h3">Promemoria backup</h3>
+<label class="field">
+<span class="field__label">Frequenza</span>
+<select class="select" id="reminderDays">
+<option value="0">Disattivato</option>
+<option value="3">Ogni 3 giorni</option>
+<option selected="" value="7">Ogni 7 giorni</option>
+<option value="14">Ogni 14 giorni</option>
+<option value="30">Ogni 30 giorni</option>
+</select>
+</label>
+<hr class="sep"/>
+<h3 class="h3">Memoria</h3>
+<div class="small muted" id="storageInfo">—</div>
+<button class="btn btn--ghost" id="btnRequestPersist" type="button">Richiedi archiviazione persistente</button>
+<hr class="sep"/>
+<h3 class="h3">Installa app</h3>
+<div id="installWrap"></div>
+<hr class="sep"/>
+<h3 class="h3">Dati demo</h3>
+<button class="btn btn--ghost" id="btnLoadDemo" type="button">Carica dati demo</button>
+<hr class="sep"/>
+<h3 class="h3 danger">Zona pericolosa</h3>
+<button class="btn btn--danger" id="btnWipeAll" type="button">Elimina tutti i dati</button>
+<div class="small muted" id="appVersion">Versione: —</div>
+</section>
+</div>
+</section>
+</main>
+<nav aria-label="Navigazione" class="bottombar" role="navigation">
+<button class="tabbtn is-active" data-go="registra" type="button">
+<span aria-hidden="true" class="tabbtn__icon">✎</span>
+<span class="tabbtn__label">Registra</span>
+</button>
+<button class="tabbtn" data-go="lista" type="button">
+<span aria-hidden="true" class="tabbtn__icon">☑</span>
+<span class="tabbtn__label">Lista</span>
+</button>
+<button class="tabbtn" data-go="storico" type="button">
+<span aria-hidden="true" class="tabbtn__icon">🗂</span>
+<span class="tabbtn__label">Storico</span>
+</button>
+<button class="tabbtn" data-go="analisi" type="button">
+<span aria-hidden="true" class="tabbtn__icon">▦</span>
+<span class="tabbtn__label">Analisi</span>
+</button>
+<button class="tabbtn" data-go="impostazioni" type="button">
+<span aria-hidden="true" class="tabbtn__icon">⚙</span>
+<span class="tabbtn__label">Impostazioni</span>
+</button>
+</nav>
+<!-- Toast -->
+<div aria-atomic="true" aria-live="polite" class="toastwrap" id="toastWrap"></div>
+<!-- Modal -->
+<div aria-labelledby="modalTitle" aria-modal="true" class="modal hidden" id="modal" role="dialog">
+<div class="modal__backdrop" data-close="1"></div>
+<div class="modal__panel">
+<div class="modal__head">
+<h2 class="modal__title" id="modalTitle">—</h2>
+<button aria-label="Chiudi" class="iconbtn" id="modalClose" type="button">✕</button>
+</div>
+<div class="modal__body" id="modalBody"></div>
+<div class="modal__foot" id="modalFoot"></div>
+</div>
+</div>
+<script src="./js/app.js?v=7" type="module"></script>
+<!-- Modal registra acquisto da lista -->
+<div aria-labelledby="saveItemTitle" aria-modal="true" class="modal hidden" id="saveItemModal" role="dialog">
+<div class="modal__backdrop" data-close="1"></div>
+<div class="modal__panel">
+<h3 class="h3" id="saveItemTitle">Registra acquisto</h3>
+<form autocomplete="off" class="form" id="saveItemForm">
+<label class="field">
+<span class="field__label">Prodotto</span>
+<input class="input" id="siProduct" maxlength="80" required=""/>
+</label>
+<div class="grid2">
+<label class="field">
+<span class="field__label">Categoria</span>
+<select class="input" id="siCategory"></select>
+</label>
+<label class="field">
+<span class="field__label">Unità</span>
+<select class="input" id="siUnit"></select>
+</label>
+</div>
+<div class="grid2">
+<label class="field">
+<span class="field__label">Quantità</span>
+<input class="input" id="siQty" inputmode="decimal"/>
+</label>
+<label class="field">
+<span class="field__label">Prezzo</span>
+<input class="input" id="siPrice" inputmode="decimal"/>
+</label>
+</div>
+<div class="grid2">
+<label class="field">
+<span class="field__label">Data</span>
+<input class="input" id="siDate" type="date"/>
+</label>
+<label class="field">
+<span class="field__label">Negozio</span>
+<input class="input" id="siStore" list="dlStores" maxlength="60"/>
+</label>
+</div>
+<div class="row">
+<button class="btn btn--primary" type="submit">Salva</button>
+<button class="btn btn--ghost" id="btnSaveItemCancel" type="button">Annulla</button>
+</div>
+</form>
+</div>
+</div>
+</body>
+</html>
