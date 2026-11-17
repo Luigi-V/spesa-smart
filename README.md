@@ -52,7 +52,6 @@ Quando modifichi i file e pubblichi una nuova versione:
 
 ## v5
 - Fix avvio: separato caricamento IndexedDB dai render per evitare falso toast "Errore caricamento dati.".
-- Fix grafici Analisi: roundRect con raggio clampato + render lazy solo quando il tab Analisi è visibile.
 - Export backup/CSV più robusto: Web Share API con file e fallback download.
 - Fix "Elimina tutti i dati": pulizia completa IndexedDB + reset stato + localStorage.
 - Rimossa completamente la modalità "Scontrino rapido".
@@ -71,7 +70,7 @@ Attenzione: questa operazione cancella anche i dati locali. Prima fai **Esporta 
 In alternativa: disinstalla/reinstalla la PWA *solo dopo* aver esportato un backup.
 
 
-## v7
+## v8
 - Badge versione in header (v7) per verificare subito la build caricata.
 - Navigazione tab resa robusta (listener delegato su document in capture, indipendente dal caricamento dati).
 - Nessun messaggio generico di errore di avvio mostrato a schermo: eventuali errori finiscono solo in console.
@@ -83,3 +82,9 @@ In alternativa: disinstalla/reinstalla la PWA *solo dopo* aver esportato un back
 1. Apri: `.../reset.html`
 2. Attendi il messaggio: "Aggiornamento forzato completato. I tuoi dati non sono stati toccati."
 3. Premi **Apri l'app**.
+
+
+## v8
+- Fix: aggiunta `parseSmartNumber()` globale (virgola/punto) usata ovunque per quantità/prezzi.
+- Fix: eliminazione acquisti (Registra/Storico) aggiorna la UI immediatamente; Undo ripristina; fallback con reload in caso di errore DB.
+- Fix Service Worker: in `activate` elimina solo cache vecchie; cache bump a `spesa-smart-v8`.

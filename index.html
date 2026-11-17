@@ -7,7 +7,7 @@
 <meta content="#059669" name="theme-color"/>
 <link href="./manifest.webmanifest" rel="manifest"/>
 <link href="./icons/icon-192.png" rel="icon"/>
-<link href="./css/style.css?v=7" rel="stylesheet"/>
+<link href="./css/style.css?v=8" rel="stylesheet"/>
 <title>Spesa Smart</title>
 </head>
 <body>
@@ -16,7 +16,7 @@
 <div class="topbar__left">
 <div aria-hidden="true" class="appmark">
 <span class="appmark__dot"></span>
-<span class="appmark__name">Spesa Smart</span><span class="versionbadge">v7</span>
+<span class="appmark__name">Spesa Smart</span><span class="versionbadge">v8</span>
 </div>
 <div class="topbar__sub" id="monthSummary">Spesa del mese: —</div>
 </div>
@@ -101,17 +101,11 @@
 <button class="btn btn--ghost" id="btnSingleReset" type="button">Pulisci</button>
 </div>
 </form>
-
-
-
-
 </div>
-
 <section class="card">
 <h2 class="h2">Ultimi acquisti</h2>
 <div class="list" id="lastPurchases"></div>
 </section>
-
 </section>
 <section class="tab hidden" data-tab="lista" id="tab-lista">
 <div class="pad">
@@ -178,42 +172,9 @@
 </section>
 </div>
 </section>
-<section class="tab hidden" data-tab="analisi" id="tab-analisi">
-<div class="pad">
-<section class="card">
-<h2 class="h2">Analisi</h2>
-<label class="field">
-<span class="field__label">Prodotto</span>
-<input class="input" id="aProduct" list="dlProducts" maxlength="80" placeholder="Seleziona un prodotto"/>
-</label>
-<div class="statsgrid" id="productStats"></div>
-<div class="chartCard">
-<div class="chartTitle">Prezzo unitario nel tempo</div>
-<canvas class="chart" height="320" id="chartUnitPrice" width="640"></canvas>
-<div class="legend" id="legendStores"></div>
-</div>
-</section>
-<section class="card">
-<h2 class="h2">Spesa</h2>
-<div class="chartCard">
-<div class="chartTitle">Spesa mensile (ultimi 12 mesi)</div>
-<canvas class="chart" height="320" id="chartMonthly" width="640"></canvas>
-</div>
-<div class="chartCard">
-<div class="chartTitle">Spesa per categoria</div>
-<canvas class="chart" height="320" id="chartCategory" width="640"></canvas>
-</div>
-<div class="chartCard">
-<div class="chartTitle">Classifica negozi (totale speso)</div>
-<canvas class="chart" height="320" id="chartStores" width="640"></canvas>
-</div>
-<div class="chartCard">
-<div class="chartTitle">Top 10 prodotti più acquistati</div>
-<canvas class="chart" height="320" id="chartTopProducts" width="640"></canvas>
-</div>
-</section>
-</div>
-</section>
+
+
+
 <section class="tab hidden" data-tab="impostazioni" id="tab-impostazioni">
 <div class="pad">
 <section class="card">
@@ -271,10 +232,7 @@
 <span aria-hidden="true" class="tabbtn__icon">🗂</span>
 <span class="tabbtn__label">Storico</span>
 </button>
-<button class="tabbtn" data-go="analisi" type="button">
-<span aria-hidden="true" class="tabbtn__icon">▦</span>
-<span class="tabbtn__label">Analisi</span>
-</button>
+
 <button class="tabbtn" data-go="impostazioni" type="button">
 <span aria-hidden="true" class="tabbtn__icon">⚙</span>
 <span class="tabbtn__label">Impostazioni</span>
@@ -294,7 +252,7 @@
 <div class="modal__foot" id="modalFoot"></div>
 </div>
 </div>
-<script src="./js/app.js?v=7" type="module"></script>
+<script src="./js/app.js?v=8" type="module"></script>
 <!-- Modal registra acquisto da lista -->
 <div aria-labelledby="saveItemTitle" aria-modal="true" class="modal hidden" id="saveItemModal" role="dialog">
 <div class="modal__backdrop" data-close="1"></div>
