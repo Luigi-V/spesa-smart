@@ -48,3 +48,14 @@ Quando modifichi i file e pubblichi una nuova versione:
 ## Note tecniche
 - Dati salvati in **IndexedDB** (`spesaSmart`, versione 1).
 - Tutto funziona con percorsi **relativi** per essere compatibile con GitHub Pages in sottopercorso.
+
+
+## v4
+- Fix avvio: separato caricamento IndexedDB dai render per evitare falso toast "Errore caricamento dati.".
+- Fix grafici Analisi: roundRect con raggio clampato + render lazy solo quando il tab Analisi è visibile.
+- Export backup/CSV più robusto: Web Share API con file e fallback download.
+- Fix "Elimina tutti i dati": pulizia completa IndexedDB + reset stato + localStorage.
+- Rimossa completamente la modalità "Scontrino rapido".
+- Dopo salvataggio acquisto: reset completo form e focus su Prodotto.
+- Lista spesa: aggiunto pulsante "Salva" per registrare rapidamente un acquisto dall’elemento.
+- Service worker: cache version bump a spesa-smart-v4 e cleanup vecchie cache.

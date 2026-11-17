@@ -47,12 +47,7 @@
 
     <section class="tab" id="tab-registra" data-tab="registra">
       <div class="pad">
-        <div class="segmented" role="tablist" aria-label="Modalità registrazione">
-          <button class="segmented__btn is-active" id="modeSingle" type="button" role="tab" aria-selected="true">Acquisto singolo</button>
-          <button class="segmented__btn" id="modeReceipt" type="button" role="tab" aria-selected="false">Scontrino rapido</button>
-        </div>
-
-        <!-- Single purchase form -->
+<!-- Single purchase form -->
         <form id="singleForm" class="card form" autocomplete="off">
           <h2 class="h2">Registra acquisto</h2>
 
@@ -120,24 +115,7 @@
             <button class="btn btn--ghost" type="button" id="btnSingleReset">Pulisci</button>
           </div>
         </form>
-
-        <!-- Receipt quick -->
-        <div id="receiptWrap" class="hidden">
-          <div class="card form">
-            <h2 class="h2">Scontrino rapido</h2>
-
-            <div class="grid2">
-              <label class="field">
-                <span class="field__label">Data</span>
-                <input class="input" id="rDate" type="date" />
-              </label>
-              <label class="field">
-                <span class="field__label">Negozio</span>
-                <input class="input" id="rStore" placeholder="Es. Coop" list="dlStores" maxlength="60" />
-              </label>
-            </div>
-
-            <div class="receiptTable" id="receiptTable" aria-label="Righe scontrino"></div>
+<div class="receiptTable" id="receiptTable" aria-label="Righe scontrino"></div>
 
             <div class="row row--between">
               <button class="btn btn--ghost" id="btnAddRow" type="button">Aggiungi riga</button>
@@ -379,5 +357,58 @@
   </div>
 
   <script type="module" src="./js/app.js"></script>
+
+  <!-- Modal registra acquisto da lista -->
+  <div class="modal hidden" id="saveItemModal" role="dialog" aria-modal="true" aria-labelledby="saveItemTitle">
+    <div class="modal__backdrop" data-close="1"></div>
+    <div class="modal__panel">
+      <h3 class="h3" id="saveItemTitle">Registra acquisto</h3>
+
+      <form id="saveItemForm" class="form" autocomplete="off">
+        <label class="field">
+          <span class="field__label">Prodotto</span>
+          <input class="input" id="siProduct" required maxlength="80" />
+        </label>
+
+        <div class="grid2">
+          <label class="field">
+            <span class="field__label">Categoria</span>
+            <select class="input" id="siCategory"></select>
+          </label>
+          <label class="field">
+            <span class="field__label">Unità</span>
+            <select class="input" id="siUnit"></select>
+          </label>
+        </div>
+
+        <div class="grid2">
+          <label class="field">
+            <span class="field__label">Quantità</span>
+            <input class="input" id="siQty" inputmode="decimal" />
+          </label>
+          <label class="field">
+            <span class="field__label">Prezzo</span>
+            <input class="input" id="siPrice" inputmode="decimal" />
+          </label>
+        </div>
+
+        <div class="grid2">
+          <label class="field">
+            <span class="field__label">Data</span>
+            <input class="input" id="siDate" type="date" />
+          </label>
+          <label class="field">
+            <span class="field__label">Negozio</span>
+            <input class="input" id="siStore" list="dlStores" maxlength="60" />
+          </label>
+        </div>
+
+        <div class="row">
+          <button class="btn btn--primary" type="submit">Salva</button>
+          <button class="btn btn--ghost" type="button" id="btnSaveItemCancel">Annulla</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </body>
 </html>
