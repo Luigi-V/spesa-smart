@@ -50,7 +50,7 @@ Quando modifichi i file e pubblichi una nuova versione:
 - Tutto funziona con percorsi **relativi** per essere compatibile con GitHub Pages in sottopercorso.
 
 
-## v4
+## v5
 - Fix avvio: separato caricamento IndexedDB dai render per evitare falso toast "Errore caricamento dati.".
 - Fix grafici Analisi: roundRect con raggio clampato + render lazy solo quando il tab Analisi è visibile.
 - Export backup/CSV più robusto: Web Share API con file e fallback download.

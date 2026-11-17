@@ -38,6 +38,17 @@ function safeRender(name, fn){
 function qs(sel, root=document){ return root.querySelector(sel); }
 function qsa(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
 
+
+function safeBind(sel, event, handler, opts){
+  const el = typeof sel === 'string' ? qs(sel) : sel;
+  if (!el){
+    console.warn('[bind] elemento mancante:', sel);
+    return false;
+  }
+  el.addEventListener(event, handler, opts);
+  return true;
+}
+
 function escapeHTML(s){
   return String(s ?? '')
     .replaceAll('&','&amp;')
@@ -573,57 +584,6 @@ async function saveSingleFromForm(){
     qs('#pProduct')?.focus();
     await refreshAll();
   clearSingleForm(true);
-}
-
-// ------- Receipt quick -------
-function receiptRowTemplate(idx){
-  const row = document.createElement('div');
-  row.className = 'receiptRow';
-  row.dataset.idx = String(idx);
-  row.innerHTML = `
-    <input class="input rProduct" placeholder="Prodotto" maxlength="80" list="dlProducts" />
-    <select class="select rCategory"></select>
-    <input class="input rQty" placeholder="Q.tà" inputmode="decimal" />
-    <select class="select rUnit"></select>
-    <input class="input rPrice" placeholder="Prezzo" inputmode="decimal" />
-    <button class="receiptRow__del" type="button" aria-label="Elimina riga">🗑</button>
-  `;
-  fillCategorySelect(qs('.rCategory', row));
-  fillUnitSelect(qs('.rUnit', row));
-  qs('.receiptRow__del', row).addEventListener('click', () => row.remove());
-  // Quick autofill when product matches known
-  qs('.rProduct', row).addEventListener('input', () => {
-    const key = normalizeKey(qs('.rProduct', row).value);
-    const known = state.products.find(p => p.key === key);
-    if (known){
-      qs('.rCategory', row).value = known.category;
-      qs('.rUnit', row).value = known.unit;
-    }
-    updateReceiptTotal();
-  });
-  for (const sel of ['.rQty','.rPrice']){
-    qs(sel, row).addEventListener('input', updateReceiptTotal);
-  }
-  return row;
-}
-
-function updateReceiptTotal(){
-  const rows = qsa('.receiptRow', qs('#receiptTable'));
-  let total = 0;
-  for (const r of rows){
-    const price = parseDecimalIT(qs('.rPrice', r).value);
-    if (Number.isFinite(price)) total += price;
-  }
-  safeText(qs('#receiptTotal'), `Totale: ${fmtEUR.format(total)}`);
-}
-
-
-function clearReceipt(){  null /* rStore removed */.value = '';
-  const table = qs('#receiptTable');
-  table.innerHTML = '';
-  table.appendChild(receiptRowTemplate(1));
-  table.appendChild(receiptRowTemplate(2));
-  updateReceiptTotal();
 }
 
 // ------- Shopping list (automatic + manual) -------
@@ -2115,8 +2075,6 @@ async function init(){
     catch(err){ toast(err?.message || 'Errore nel salvataggio.'); }
   });
   qs('#btnSingleReset').addEventListener('click', () => clearSingleForm(true));
-  qs('#btnClearReceipt').addEventListener('click', clearReceipt);
-  null /* rStore removed */.addEventListener('input', updateReceiptTotal);
   // shopping list
   qs('#manualForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2212,5 +2170,5 @@ async function init(){
 
 init().catch((e) => {
   console.error(e);
-  toast('Errore di inizializzazione.');
+  // Non mostrare toast generico: log only
 });

@@ -251,16 +251,13 @@ body{
   display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;
 }
 
-.receiptRow{
   display:grid;
   grid-template-columns: 1.4fr 1fr 0.7fr 0.7fr 0.9fr 44px;
   gap:8px;
   align-items:center;
 }
 @media (max-width:520px){
-.receiptRow .receiptRow__del{grid-column: 2 / 3; justify-self:end}
 }
-.receiptRow__del{width:44px;height:44px;border-radius:12px;border:1px solid var(--line); background:#fff; cursor:pointer}
 .chips{display:flex; gap:8px; flex-wrap:wrap}
 .chip{
   min-height:36px;
