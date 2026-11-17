@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#059669" />
+  <title>Spesa Smart - Reset aggiornamento</title>
+  <link rel="icon" href="./icons/icon-192.png" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;margin:0;background:#f6f7f9;color:#111827}
+    .wrap{max-width:720px;margin:40px auto;padding:0 16px}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:18px;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+    h1{font-size:20px;margin:0 0 10px}
+    p{margin:10px 0;line-height:1.45}
+    code{background:#f3f4f6;padding:2px 6px;border-radius:8px}
+    .btn{display:inline-block;border:0;border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer;background:#059669;color:#fff;text-decoration:none}
+    .muted{color:#6b7280;font-size:13px}
+    .log{margin-top:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:12px;white-space:pre-wrap;background:#0b1220;color:#e5e7eb;border-radius:12px;padding:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Reset aggiornamento (Spesa Smart)</h1>
+      <p id="status">Esecuzione pulizia…</p>
+      <p class="muted">Questa pagina rimuove <b>solo</b> Service Worker e Cache Storage. Non tocca <b>IndexedDB</b> né <b>localStorage</b>, quindi i tuoi dati restano.</p>
+      <div class="log" id="log"></div>
+      <p style="margin-top:14px">
+        <a class="btn" href="./index.html">Apri l'app</a>
+      </p>
+    </div>
+  </div>
+<script>
+(function(){
+  const logEl = document.getElementById('log');
+  const statusEl = document.getElementById('status');
+  function log(msg){ logEl.textContent += msg + "\n"; }
+  async function run(){
+    try{
+      if ('serviceWorker' in navigator){
+        const regs = await navigator.serviceWorker.getRegistrations();
+        log('Service Worker trovati: ' + regs.length);
+        for (const r of regs){
+          await r.unregister();
+          log('Unregister: OK');
+        }
+      } else {
+        log('Service Worker non supportati.');
+      }
+
+      if ('caches' in window){
+        const keys = await caches.keys();
+        log('Cache trovate: ' + keys.length);
+        for (const k of keys){
+          await caches.delete(k);
+          log('Delete cache: ' + k);
+        }
+      } else {
+        log('Cache Storage non supportato.');
+      }
+
+      statusEl.textContent = 'Aggiornamento forzato completato. I tuoi dati non sono stati toccati.';
+    } catch (e){
+      console.error(e);
+      statusEl.textContent = 'Operazione completata con avvisi. Apri comunque l\'app.';
+      log('ERRORE: ' + (e && e.message ? e.message : String(e)));
+    }
+  }
+  run();
+})();
+</script>
+</body>
+</html>

@@ -69,3 +69,17 @@ Quando modifichi i file e pubblichi una nuova versione:
 Su Chrome Android: **Impostazioni sito > Spazio di archiviazione > Cancella e reset**.
 Attenzione: questa operazione cancella anche i dati locali. Prima fai **Esporta backup** dall'app.
 In alternativa: disinstalla/reinstalla la PWA *solo dopo* aver esportato un backup.
+
+
+## v7
+- Badge versione in header (v7) per verificare subito la build caricata.
+- Navigazione tab resa robusta (listener delegato su document in capture, indipendente dal caricamento dati).
+- Nessun messaggio generico di errore di avvio mostrato a schermo: eventuali errori finiscono solo in console.
+- Service Worker v7: cache `spesa-smart-v7`, pulizia cache vecchie, network-first per HTML/JS/CSS con `cache: 'reload'`, fallback offline.
+- Registrazione SW con `updateViaCache: 'none'`.
+- Aggiunta pagina `reset.html` per forzare aggiornamento (rimuove SW+Cache, preserva IndexedDB/localStorage).
+
+### Procedura reset (Android Chrome / PWA)
+1. Apri: `.../reset.html`
+2. Attendi il messaggio: "Aggiornamento forzato completato. I tuoi dati non sono stati toccati."
+3. Premi **Apri l'app**.
