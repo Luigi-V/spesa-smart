@@ -146,6 +146,27 @@ function toast(msg, ms=2600){
     el.style.transition = 'opacity 250ms';
   }, ms-250);
   setTimeout(() => el.remove(), ms);
+
+
+function toastWithAction(message, actionText, actionFn, duration=5000){
+  const wrap = qs('#toasts');
+  if (!wrap){ toast(message); return; }
+  const div = document.createElement('div');
+  div.className = 'toast';
+  div.innerHTML = `
+    <div class="toast__row">
+      <div class="toast__msg">${escapeHTML(message)}</div>
+      <button class="toast__action" type="button">${escapeHTML(actionText || 'OK')}</button>
+    </div>
+  `;
+  const btn = div.querySelector('button');
+  btn.addEventListener('click', async () => {
+    try{ await actionFn?.(); }catch(e){ console.error(e); }
+    div.remove();
+  });
+  wrap.appendChild(div);
+  setTimeout(() => div.remove(), duration);
+}
 }
 
 // ------- Modal -------
@@ -361,6 +382,9 @@ function renderLastPurchases(){
           <div class="item__title"><span class="dot" style="background:${catColor(p.category)}"></span>${escapeHTML(p.product)}</div>
           <div class="item__meta">${escapeHTML(toDDMMYYYY(p.date))} • ${escapeHTML(p.store || '—')} • ${escapeHTML(p.qty)} ${escapeHTML(p.unit)} • ${escapeHTML(fmtEUR.format(Number(p.price)||0))}</div>
           <div class="item__meta">Prezzo unitario: ${Number.isFinite(unitP) ? escapeHTML(fmtNum2.format(unitP)) + ' ' + escapeHTML(unitLabel(p.unit)) : '—'}</div>
+        </div>
+        <div class="item__actions">
+          <button class="iconbtn iconbtn--danger" type="button" data-del="${escapeHTML(p.id)}" aria-label="Elimina acquisto" title="Elimina" style="width:40px;height:40px">🗑️</button>
         </div>
       </div>
     `;
@@ -997,10 +1021,26 @@ function renderHistory(){
 }
 
 async function deletePurchase(id){
-  const ok = await confirmModal({ title:'Elimina acquisto', message:'Vuoi eliminare questo acquisto?', confirmText:'Elimina', danger:true });
+  const p = state.purchases.find(x => String(x.id) === String(id)) || await db.get('purchases', id);
+  if (!p){
+    toast('Acquisto non trovato.');
+    return;
+  }
+  const msg = `${p.product || '—'}
+${toDDMMYYYY(p.date)} • ${fmtEUR.format(Number(p.price)||0)}`;
+  const ok = await confirmModal({ title:'Elimina acquisto', message: msg, confirmText:'Elimina', danger:true });
   if (!ok) return;
+
+  // snapshot per undo
+  const snapshot = { ...p };
+
   await db.del('purchases', id);
-  toast('Acquisto eliminato.');
+  toastWithAction('Acquisto eliminato', 'Annulla', async () => {
+    await db.put('purchases', snapshot);
+    toast('Operazione annullata.');
+    await refreshAll();
+  }, 5200);
+
   await refreshAll();
 }
 
@@ -1780,17 +1820,35 @@ async function wipeAll(){
 // ------- Navigation -------
 function showTab(tab){
   qsa('.tab').forEach(t => t.classList.add('hidden'));
-  qs(`#tab-${tab}`).classList.remove('hidden');
+  const target = qs(`#tab-${tab}`);
+  if (!target){
+    console.warn('Tab non trovata:', tab);
+    return;
+  }
+  target.classList.remove('hidden');
   qsa('.tabbtn').forEach(b => b.classList.toggle('is-active', b.dataset.go===tab));
   // per accessibilità: scroll top della pagina
   window.scrollTo({ top:0, behavior:'instant' });
 }
 
 function initNav(){
-  qsa('.tabbtn').forEach(btn => {
-    btn.addEventListener('click', () => showTab(btn.dataset.go));
-  });
-  qs('#btnQuickAdd').addEventListener('click', () => showTab('registra'));
+  // Event delegation: robusto anche se l'init dei dati fallisce o se i bottoni vengono ricreati.
+  const nav = qs('.bottombar');
+  if (nav && !nav.dataset.bound){
+    nav.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tabbtn');
+      if (!btn) return;
+      const tab = btn.dataset.go;
+      if (tab) showTab(tab);
+    });
+    nav.dataset.bound = '1';
+  }
+
+  const quick = qs('#btnQuickAdd');
+  if (quick && !quick.dataset.bound){
+    quick.addEventListener('click', () => showTab('registra'));
+    quick.dataset.bound = '1';
+  }
 }
 
 // ------- Refresh all UI -------
@@ -1875,6 +1933,19 @@ async function init(){
     qs('#singleForm').classList.add('hidden');
     qs('#receiptWrap').classList.remove('hidden');
   });
+
+
+  // azioni lista "Ultimi acquisti" (delegation)
+  const lastWrap = qs('#lastPurchases');
+  if (lastWrap && !lastWrap.dataset.bound){
+    lastWrap.addEventListener('click', (e) => {
+      const delBtn = e.target.closest('button[data-del]');
+      if (!delBtn) return;
+      const id = delBtn.getAttribute('data-del');
+      if (id) deletePurchase(id);
+    });
+    lastWrap.dataset.bound = '1';
+  }
 
   // single form listeners
   qs('#pProduct').addEventListener('input', updateProductHint);
@@ -1970,8 +2041,11 @@ async function init(){
     if (e.key === 'Escape' && !qs('#modal').classList.contains('hidden')) closeModal();
   });
 
-  await refreshAll();
+  // Nav deve funzionare anche se il caricamento dati fallisce
   initNav();
+  try{ await refreshAll(); }
+  catch(e){ console.error(e); toast('Errore caricamento dati.'); }
+
 
   // start on Registra
   showTab('registra');

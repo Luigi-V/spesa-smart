@@ -310,3 +310,11 @@ body{
 .legend{display:flex; gap:10px; flex-wrap:wrap; margin-top:8px}
 .legend__item{display:flex; gap:6px; align-items:center; font-size:12px; color:var(--muted)}
 .legend__sw{width:10px;height:10px;border-radius:999px}
+
+
+.toast__row{display:flex; align-items:center; justify-content:space-between; gap:12px}
+.toast__msg{flex:1}
+.toast__action{min-width:90px; height:36px; padding:0 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.10); color:#fff; font-weight:800}
+.toast__action:active{transform: translateY(1px)}
+
+.iconbtn--danger{color:#ef4444}

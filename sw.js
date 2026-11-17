@@ -1,5 +1,5 @@
 // Spesa Smart - Service Worker (cache-first con fallback rete)
-const CACHE_NAME = 'spesa-smart-v2';
+const CACHE_NAME = 'spesa-smart-v3';
 const PRECACHE_URLS = [
   './',
   './index.html',
