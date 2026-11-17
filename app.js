@@ -1,7 +1,7 @@
 // Spesa Smart - UI e logica (offline-first, nessuna libreria esterna)
 import * as db from './db.js';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = 'v6';
 const SCHEMA_VERSION = 1;
 
 const CATEGORIES = [
@@ -1987,7 +1987,7 @@ async function refreshAll(renderEverything=true){
   await initStorageInfo();
   await maybeShowBackupReminder();
 
-  qs('#appVersion').textContent = `Versione: ${APP_VERSION}`;
+  qs('#appVersion') && (qs('#appVersion').textContent = 'Versione 6');
 }
 
 // ------- Init -------

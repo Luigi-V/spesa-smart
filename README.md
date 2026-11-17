@@ -59,3 +59,13 @@ Quando modifichi i file e pubblichi una nuova versione:
 - Dopo salvataggio acquisto: reset completo form e focus su Prodotto.
 - Lista spesa: aggiunto pulsante "Salva" per registrare rapidamente un acquisto dall’elemento.
 - Service worker: cache version bump a spesa-smart-v4 e cleanup vecchie cache.
+
+
+## Versione 6 (v6)
+- Fix aggiornamento PWA su GitHub Pages: cache SW aggiornata a `spesa-smart-v6`, precache con `cache: 'reload'`, strategie: network-first per navigazioni e asset .js/.css/.html; cache-first solo per icone/immagini.
+- Etichetta visibile in Impostazioni: **Versione 6** (anche in console all'avvio).
+
+### Se l'app mostra ancora la vecchia versione
+Su Chrome Android: **Impostazioni sito > Spazio di archiviazione > Cancella e reset**.
+Attenzione: questa operazione cancella anche i dati locali. Prima fai **Esporta backup** dall'app.
+In alternativa: disinstalla/reinstalla la PWA *solo dopo* aver esportato un backup.

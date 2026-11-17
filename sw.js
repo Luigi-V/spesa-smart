@@ -1,11 +1,14 @@
-// Spesa Smart - Service Worker (cache-first con fallback rete)
-const CACHE_NAME = 'spesa-smart-v5';
+// Spesa Smart - Service Worker
+// v6: update-safe caching for GitHub Pages + network-first for navigations/assets
+const CACHE_NAME = 'spesa-smart-v6';
+
+// NB: usare gli stessi URL presenti in index.html (con ?v=6) per evitare servire asset vecchi
 const PRECACHE_URLS = [
   './',
   './index.html',
-  './css/style.css',
-  './js/app.js',
-  './js/db.js',
+  './css/style.css?v=6',
+  './js/db.js?v=6',
+  './js/app.js?v=6',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -15,7 +18,12 @@ const PRECACHE_URLS = [
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(PRECACHE_URLS);
+    // Forza il reload bypassando cache HTTP (GH Pages può servire risposte cache-ate)
+    await Promise.all(PRECACHE_URLS.map(async (url) => {
+      const req = new Request(url, { cache: 'reload' });
+      const res = await fetch(req);
+      await cache.put(url, res);
+    }));
     self.skipWaiting();
   })());
 });
@@ -28,34 +36,52 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
-});
-
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req, { ignoreSearch: true });
-    if (cached) return cached;
+  const url = new URL(req.url);
 
-    try{
+  const isSameOrigin = (url.origin === self.location.origin);
+  const isNav = req.mode === 'navigate';
+  const isCodeAsset = isSameOrigin && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html'));
+  const isImage = isSameOrigin && (url.pathname.startsWith('/icons/') || url.pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)$/i));
+
+  // Network-first for navigations and code assets
+  if (isNav || isCodeAsset) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const fresh = await fetch(req);
+        // cache without search for app shell? keep full req url to respect ?v=
+        await cache.put(req, fresh.clone());
+        return fresh;
+      } catch (e) {
+        const cached = await cache.match(req, { ignoreSearch: false }) || await cache.match(req, { ignoreSearch: true });
+        if (cached) return cached;
+        // fallback to app shell for navigations
+        if (isNav) {
+          const shell = await cache.match('./index.html');
+          if (shell) return shell;
+        }
+        throw e;
+      }
+    })());
+    return;
+  }
+
+  // Cache-first for images/icons
+  if (isImage) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(req, { ignoreSearch: true });
+      if (cached) return cached;
       const fresh = await fetch(req);
-      // cache same-origin only
-      const url = new URL(req.url);
-      if (url.origin === self.location.origin){
-        cache.put(req, fresh.clone());
-      }
+      await cache.put(req, fresh.clone());
       return fresh;
-    }catch(e){
-      // fallback to app shell for navigations
-      if (req.mode === 'navigate'){
-        const shell = await cache.match('./index.html');
-        if (shell) return shell;
-      }
-      throw e;
-    }
-  })());
+    })());
+    return;
+  }
+
+  // Default: pass-through
 });
