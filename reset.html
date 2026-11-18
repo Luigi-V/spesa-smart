@@ -1,55 +1,45 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
-  <title>Reset - Spesa Smart v5</title>
-  <link rel="stylesheet" href="./css/style.css?v=4">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Reset Spesa Smart</title>
+<style>
+  body{margin:0;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;
+    display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px}
+  .box{max-width:420px;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;text-align:center}
+  h1{margin:0 0 12px;font-size:1.25rem;color:#10b981}
+  .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 18px;border-radius:10px;
+    background:#10b981;color:#04130e;font-weight:600;text-decoration:none}
+</style>
 </head>
 <body>
-  <main class="app-main" role="main">
-    <section class="section" aria-label="Reset">
-      <div class="card">
-        <h1 class="card-title">Reset cache e service worker</h1>
-        <p class="muted">
-          Questa pagina rimuove service worker e cache dell'app. I dati in IndexedDB non vengono toccati.
-        </p>
-        <div id="resetStatus" class="hint">Operazione in corso…</div>
-        <div class="form-actions">
-          <a id="openAppLink" class="btn btn-primary" href="./" hidden>Apri l'app</a>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <script>
-  (async () => {
-    const statusEl = document.getElementById('resetStatus');
-    const openLink = document.getElementById('openAppLink');
-    const setStatus = (t) => { if (statusEl) statusEl.textContent = t; };
-
-    try {
-      if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (const r of regs) {
-          try { await r.unregister(); } catch (e) { console.error(e); }
-        }
-      }
-      if (window.caches && caches.keys) {
-        const keys = await caches.keys();
-        for (const k of keys) {
-          try { await caches.delete(k); } catch (e) { console.error(e); }
-        }
-      }
-      setStatus('Completato. Puoi riaprire l’app.');
-      if (openLink) openLink.hidden = false;
-    } catch (err) {
-      console.error(err);
-      setStatus('Impossibile completare il reset. Controlla la console.');
-      if (openLink) openLink.hidden = false;
+<main class="box">
+  <h1>Reset dell'app</h1>
+  <p id="msg">Pulizia in corso…</p>
+  <a id="open" class="btn" href="./" hidden>Apri l'app</a>
+</main>
+<script>
+(async function () {
+  var msg = document.getElementById('msg');
+  var open = document.getElementById('open');
+  try {
+    if ('serviceWorker' in navigator) {
+      var regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(function (r) { return r.unregister(); }));
     }
-  })();
-  </script>
+    if (window.caches) {
+      var keys = await caches.keys();
+      await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+    }
+    msg.textContent = 'Reset completato. I tuoi dati sono rimasti sul telefono.';
+  } catch (e) {
+    console.error(e);
+    msg.textContent = 'Reset non completato. Riprova.';
+  }
+  open.hidden = false;
+})();
+</script>
 </body>
 </html>

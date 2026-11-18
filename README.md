@@ -1,32 +1,27 @@
-# Spesa Smart (v5)
+# Spesa Smart (v6)
 
-PWA offline per registrare acquisti, gestire la lista e mantenere uno storico.
+PWA personale per registrare gli acquisti della spesa e generare la lista automatica.
+Tutti i dati restano sul telefono (IndexedDB). Nessun server, nessun login.
 
 ## Pubblicazione su GitHub Pages
-1. Metti tutti i file dell'app nella **radice** del repository.
-2. Vai su **Settings → Pages**.
-3. Seleziona **Branch: main** e **/ (root)**.
-
-L’app è pensata per funzionare anche pubblicata in una **sottocartella** (tutti i percorsi sono relativi `./`).
+1. Crea un repository su GitHub.
+2. Carica tutti i file nella root del repository (index.html, sw.js, manifest.webmanifest, reset.html, cartelle css, js, icons).
+3. Vai su Settings, Pages, scegli branch main e cartella / (root), poi Save.
+4. Dopo un minuto l'app è su https://UTENTE.github.io/REPO/
 
 ## Installazione su Android
-In Chrome:
-1. apri il sito
-2. menu ⋮
-3. **Aggiungi a schermata Home**
+1. Apri l'indirizzo in Chrome.
+2. Premi il menu con i tre puntini, poi "Aggiungi a schermata Home" (oppure usa "Installa app" in Impostazioni).
+3. Apri l'app almeno una volta con la connessione attiva: poi funziona anche offline.
 
-## reset.html
-Apri `reset.html` per rimuovere **service worker** e **cache** dell’app (non tocca i dati in IndexedDB).
-Poi premi **Apri l'app**.
+## Aggiornamenti
+A ogni nuova versione incrementa VERSION in sw.js e js/app.js, la versione scritta in index.html
+e il parametro ?v= di css e js. L'app si aggiorna da sola alla riapertura con la rete.
+
+## In caso di problemi: reset.html
+Apri l'indirizzo dell'app seguito da reset.html. Cancella service worker e cache
+senza toccare i dati. Poi premi "Apri l'app".
 
 ## Backup
-Consiglio: esporta backup regolari dalle Impostazioni e conservali fuori dal telefono.
-
-## Regola versione
-A ogni nuova versione incrementare `VERSION` in:
-- `index.html` (risorse con `?v=...` e testo versione)
-- `js/app.js` (costante `VERSION`)
-- `sw.js` (costante `VERSION` e nome cache)
-
-
-Versione 5
+Fai il backup regolarmente da Impostazioni, Esporta backup, e salvalo in File o Drive.
+Se cancelli i dati di Chrome o disinstalli l'app, i dati non si recuperano senza backup.

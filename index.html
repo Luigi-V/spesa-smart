@@ -1,461 +1,256 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
-  <title>Spesa Smart v5</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icons/icon-192.png">
-  <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./css/style.css?v=5">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Spesa Smart</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./css/style.css?v=6">
 </head>
 <body>
-  <a class="sr-only" href="#main">Vai al contenuto</a>
 
-  <header class="app-header" role="banner">
-    <div class="app-header__inner">
-      <div class="app-title">
-        <div class="app-title__name">Spesa Smart</div>
-        <div class="app-title__version">v5</div>
+<header class="app-header">
+  <h1>Spesa Smart</h1>
+  <span class="ver">v6</span>
+</header>
+
+<div id="backupBanner" class="banner" hidden>
+  <span id="backupBannerText"></span>
+  <button type="button" id="bannerExport" class="btn small primary">Esporta ora</button>
+  <button type="button" id="bannerClose" class="icon-btn" aria-label="Chiudi">&times;</button>
+</div>
+
+<main>
+
+  <!-- REGISTRA -->
+  <section id="sec-registra" class="section">
+    <h2>Registra acquisto</h2>
+    <form id="formRegistra" class="card" autocomplete="off" novalidate>
+      <label class="field">Prodotto *
+        <input id="f-product" type="text" list="dl-products" autocomplete="off" autocapitalize="sentences" enterkeyhint="next">
+      </label>
+      <div id="lastInfo" class="hint" hidden></div>
+      <label class="field">Categoria
+        <select id="f-category"></select>
+      </label>
+      <div class="grid2">
+        <label class="field">Quantità *
+          <input id="f-qty" type="text" inputmode="decimal" value="1">
+        </label>
+        <label class="field">Unità
+          <select id="f-unit"></select>
+        </label>
       </div>
-      <div class="header-actions">
-        <button id="installBtn" class="btn btn-ghost btn-sm" type="button" hidden>Installa app</button>
+      <label class="field">Prezzo totale € *
+        <input id="f-price" type="text" inputmode="decimal" placeholder="0,00">
+      </label>
+      <div id="unitPriceRow" class="hint" hidden>
+        Prezzo unitario: <strong id="unitPriceVal"></strong>
+        <span id="priceBadge" class="badge" hidden></span>
       </div>
+      <label class="field">Data acquisto *
+        <input id="f-date" type="date">
+      </label>
+      <label class="field">Negozio
+        <input id="f-store" type="text" list="dl-stores" autocomplete="off">
+      </label>
+      <label class="field">Marca (opzionale)
+        <input id="f-brand" type="text" autocomplete="off">
+      </label>
+      <label class="field">Note (opzionale)
+        <input id="f-notes" type="text" autocomplete="off">
+      </label>
+      <button type="submit" class="btn primary block">Salva</button>
+    </form>
+
+    <h3>Ultimi acquisti</h3>
+    <div id="recentList" class="card"></div>
+  </section>
+
+  <!-- LISTA -->
+  <section id="sec-lista" class="section" hidden>
+    <h2>Lista della spesa</h2>
+    <div class="counters">
+      <div class="counter late"><b id="cnt-late">0</b><span>In ritardo</span></div>
+      <div class="counter soon"><b id="cnt-soon">0</b><span>A breve</span></div>
+      <div class="counter ok"><b id="cnt-ok">0</b><span>Ok</span></div>
     </div>
-  </header>
 
-  <div id="backupBanner" class="banner" hidden>
-    <div class="banner__content">
-      <div class="banner__title">Promemoria backup</div>
-      <div id="backupBannerText" class="banner__text">È consigliato esportare un backup.</div>
+    <form id="manualForm" class="card" autocomplete="off" novalidate>
+      <label class="field">Aggiungi un prodotto a mano
+        <input id="manualName" type="text" autocomplete="off" placeholder="Nome prodotto">
+      </label>
+      <label class="field">Categoria
+        <select id="manualCat"></select>
+      </label>
+      <button type="submit" class="btn primary block">Aggiungi</button>
+    </form>
+
+    <div id="listFilter" class="seg">
+      <button type="button" class="seg-btn active" data-filter="all">Mostra tutti</button>
+      <button type="button" class="seg-btn" data-filter="buy">Solo da comprare</button>
     </div>
-    <div class="banner__actions">
-      <button id="backupBannerExportBtn" class="btn btn-primary btn-sm" type="button">Esporta ora</button>
-      <button id="backupBannerDismissBtn" class="btn btn-ghost btn-sm" type="button">Chiudi</button>
+    <div class="toolbar">
+      <button type="button" id="btnShare" class="btn">Condividi lista</button>
+      <button type="button" id="btnClearChecked" class="btn">Rimuovi spuntati</button>
     </div>
-  </div>
+    <div id="listContainer"></div>
+  </section>
 
-  <main id="main" class="app-main" role="main">
-    <section id="section-registra" class="section" data-section="registra" aria-label="Registra">
-      <div class="card">
-        <h2 class="card-title">Registra</h2>
-
-        <form id="purchaseForm" class="form" autocomplete="off">
-          <div class="form-row">
-            <label class="label" for="productInput">Prodotto<span class="req">*</span></label>
-            <input id="productInput" class="input" name="product" type="text" list="productsDatalist" inputmode="text" autocomplete="off" required minlength="1" />
-            <datalist id="productsDatalist"></datalist>
-          </div>
-
-          <div class="form-row">
-            <label class="label" for="categorySelect">Categoria</label>
-            <select id="categorySelect" class="select" name="category">
-              <option>Frutta e verdura</option>
-              <option>Carne e pesce</option>
-              <option>Latticini</option>
-              <option>Pane e cereali</option>
-              <option>Bevande</option>
-              <option>Surgelati</option>
-              <option>Dispensa</option>
-              <option>Casa e pulizia</option>
-              <option>Igiene personale</option>
-              <option selected>Altro</option>
-            </select>
-          </div>
-
-          <div class="form-grid">
-            <div class="form-row">
-              <label class="label" for="qtyInput">Quantità<span class="req">*</span></label>
-              <input id="qtyInput" class="input" name="qty" type="text" inputmode="decimal" value="1" />
-            </div>
-
-            <div class="form-row">
-              <label class="label" for="unitSelect">Unità</label>
-              <select id="unitSelect" class="select" name="unit">
-                <option selected>pz</option>
-                <option>kg</option>
-                <option>g</option>
-                <option>l</option>
-                <option>ml</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label class="label" for="priceInput">Prezzo totale €<span class="req">*</span></label>
-              <input id="priceInput" class="input" name="price" type="text" inputmode="decimal" placeholder="es. 1,50" />
-            </div>
-
-            <div class="form-row">
-              <label class="label" for="dateInput">Data acquisto<span class="req">*</span></label>
-              <input id="dateInput" class="input" name="date" type="date" />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <label class="label" for="storeInput">Negozio</label>
-            <input id="storeInput" class="input" name="store" type="text" list="storesDatalist" inputmode="text" />
-            <datalist id="storesDatalist"></datalist>
-          </div>
-
-          <div class="form-row">
-            <label class="label" for="brandInput">Marca</label>
-            <input id="brandInput" class="input" name="brand" type="text" inputmode="text" />
-          </div>
-
-          <div class="form-row">
-            <label class="label" for="notesInput">Note</label>
-            <textarea id="notesInput" class="textarea" name="notes" rows="3"></textarea>
-          </div>
-
-          <div id="unitPriceRow" class="hint" hidden>
-            <div class="hint__label">Prezzo unitario</div>
-            <div id="unitPriceText" class="hint__value">—</div>
-          </div>
-
-          <div id="priceBadgeRow" class="badge-row" hidden>
-            <span id="priceBadge" class="badge">In media</span>
-            <span id="priceBadgeDetails" class="muted"></span>
-          </div>
-
-          <div id="lastPurchaseCard" class="subcard" hidden>
-            <div class="subcard__title">Ultimo acquisto</div>
-            <div id="lastPurchaseText" class="subcard__text"></div>
-          </div>
-
-          <div class="form-actions">
-            <button id="savePurchaseBtn" class="btn btn-primary" type="submit">Salva</button>
-          </div>
-        </form>
+  <!-- STORICO -->
+  <section id="sec-storico" class="section" hidden>
+    <h2>Storico</h2>
+    <div class="card">
+      <label class="field">Cerca (prodotto, marca, note)
+        <input id="h-search" type="search" autocomplete="off">
+      </label>
+      <div class="grid2">
+        <label class="field">Categoria
+          <select id="h-cat"></select>
+        </label>
+        <label class="field">Negozio
+          <select id="h-store"></select>
+        </label>
       </div>
-
-      <div class="card">
-        <div class="card-head">
-          <h3 class="card-title">Ultimi acquisti</h3>
-          <div class="muted">max 8</div>
-        </div>
-        <div id="recentPurchases" class="list"></div>
+      <div class="grid2">
+        <label class="field">Dal
+          <input id="h-from" type="date">
+        </label>
+        <label class="field">Al
+          <input id="h-to" type="date">
+        </label>
       </div>
-    </section>
-
-    <section id="section-lista" class="section" data-section="lista" aria-label="Lista" hidden>
-      <div class="card">
-        <div class="card-head">
-          <h2 class="card-title">Lista</h2>
-          <div class="segmented" role="group" aria-label="Filtro lista">
-            <button id="listFilterAllBtn" class="segmented__btn" type="button">Mostra tutti</button>
-            <button id="listFilterNeededBtn" class="segmented__btn" type="button">Solo da comprare</button>
-          </div>
-        </div>
-
-        <div class="stats">
-          <div class="stat stat--danger">
-            <div class="stat__label">In ritardo</div>
-            <div id="countLate" class="stat__value">0</div>
-          </div>
-          <div class="stat stat--warn">
-            <div class="stat__label">A breve</div>
-            <div id="countSoon" class="stat__value">0</div>
-          </div>
-          <div class="stat stat--ok">
-            <div class="stat__label">Ok</div>
-            <div id="countOk" class="stat__value">0</div>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="form-grid">
-          <div class="form-row">
-            <label class="label" for="manualItemName">Aggiungi voce</label>
-            <input id="manualItemName" class="input" type="text" inputmode="text" placeholder="es. Pasta" />
-          </div>
-          <div class="form-row">
-            <label class="label" for="manualItemCategory">Categoria</label>
-            <select id="manualItemCategory" class="select">
-              <option>Frutta e verdura</option>
-              <option>Carne e pesce</option>
-              <option>Latticini</option>
-              <option>Pane e cereali</option>
-              <option>Bevande</option>
-              <option>Surgelati</option>
-              <option>Dispensa</option>
-              <option>Casa e pulizia</option>
-              <option>Igiene personale</option>
-              <option selected>Altro</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-actions">
-          <button id="addManualItemBtn" class="btn btn-primary" type="button">Aggiungi</button>
-          <button id="shareListBtn" class="btn btn-ghost" type="button">Condividi lista</button>
-          <button id="removeCheckedBtn" class="btn btn-danger" type="button">Rimuovi spuntati</button>
-        </div>
-      </div>
-
-      <div id="listContent" class="stack"></div>
-    </section>
-
-    <section id="section-storico" class="section" data-section="storico" aria-label="Storico" hidden>
-      <div class="card">
-        <div class="card-head">
-          <h2 class="card-title">Storico</h2>
-          <button id="resetHistoryFiltersBtn" class="btn btn-ghost btn-sm" type="button">Azzera filtri</button>
-        </div>
-
-        <div class="form">
-          <div class="form-row">
-            <label class="label" for="historySearch">Ricerca</label>
-            <input id="historySearch" class="input" type="search" inputmode="search" placeholder="Prodotto, marca, note" />
-          </div>
-
-          <div class="form-grid">
-            <div class="form-row">
-              <label class="label" for="historyCategory">Categoria</label>
-              <select id="historyCategory" class="select">
-                <option value="">Tutte</option>
-                <option>Frutta e verdura</option>
-                <option>Carne e pesce</option>
-                <option>Latticini</option>
-                <option>Pane e cereali</option>
-                <option>Bevande</option>
-                <option>Surgelati</option>
-                <option>Dispensa</option>
-                <option>Casa e pulizia</option>
-                <option>Igiene personale</option>
-                <option>Altro</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label class="label" for="historyStore">Negozio</label>
-              <select id="historyStore" class="select">
-                <option value="">Tutti</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label class="label" for="historyFrom">Dal</label>
-              <input id="historyFrom" class="input" type="date" />
-            </div>
-
-            <div class="form-row">
-              <label class="label" for="historyTo">Al</label>
-              <input id="historyTo" class="input" type="date" />
-            </div>
-          </div>
-        </div>
-
-        <div class="stats stats--two">
-          <div class="stat">
-            <div class="stat__label">Acquisti</div>
-            <div id="historyCount" class="stat__value">0</div>
-          </div>
-          <div class="stat">
-            <div class="stat__label">Totale</div>
-            <div id="historyTotal" class="stat__value">0,00 €</div>
-          </div>
-        </div>
-      </div>
-
-      <div id="historyList" class="stack"></div>
-    </section>
-
-    <section id="section-impostazioni" class="section" data-section="impostazioni" aria-label="Impostazioni" hidden>
-      <div class="card">
-        <h2 class="card-title">Impostazioni</h2>
-
-        <div class="settings-grid">
-          <div class="setting">
-            <div class="setting__title">Backup</div>
-            <div class="setting__desc">Esporta un file JSON da conservare.</div>
-            <div class="setting__actions">
-              <button id="exportBackupBtn" class="btn btn-primary" type="button">Esporta backup</button>
-              <button id="importBackupBtn" class="btn btn-ghost" type="button">Importa backup</button>
-              <input id="importFileInput" type="file" accept="application/json" hidden />
-            </div>
-          </div>
-
-          <div class="setting">
-            <div class="setting__title">Esporta CSV</div>
-            <div class="setting__desc">Formato con separatore ; e decimali con virgola.</div>
-            <div class="setting__actions">
-              <button id="exportCsvBtn" class="btn btn-ghost" type="button">Esporta CSV</button>
-            </div>
-          </div>
-
-          <div class="setting">
-            <div class="setting__title">Promemoria backup</div>
-            <div class="setting__desc">Mostra un avviso se il backup è scaduto.</div>
-            <div class="setting__actions">
-              <label class="label" for="backupReminderSelect">Intervallo</label>
-              <select id="backupReminderSelect" class="select">
-                <option value="0">Disattivato</option>
-                <option value="3">3 giorni</option>
-                <option value="7" selected>7 giorni</option>
-                <option value="14">14 giorni</option>
-                <option value="30">30 giorni</option>
-              </select>
-              <div class="muted" id="lastBackupText">Ultimo backup: mai</div>
-            </div>
-          </div>
-
-          <div class="setting">
-            <div class="setting__title">Archiviazione</div>
-            <div class="setting__desc">Controlla lo stato dell'archiviazione del browser.</div>
-            <div class="setting__actions">
-              <div class="muted" id="storageStatusText">Stato: —</div>
-              <div class="muted" id="storageEstimateText">Spazio: —</div>
-              <button id="persistStorageBtn" class="btn btn-ghost" type="button">Richiedi archiviazione persistente</button>
-            </div>
-          </div>
-
-          <div class="setting">
-            <div class="setting__title">Dati demo</div>
-            <div class="setting__desc">Popola l'app con acquisti di esempio (non duplica).</div>
-            <div class="setting__actions">
-              <button id="loadDemoBtn" class="btn btn-ghost" type="button">Carica dati demo</button>
-            </div>
-          </div>
-
-          <div class="setting setting--danger">
-            <div class="setting__title">Zona pericolosa</div>
-            <div class="setting__desc">Elimina tutti i dati dell'app dal database.</div>
-            <div class="setting__actions">
-              <button id="wipeAllBtn" class="btn btn-danger" type="button">Elimina tutti i dati</button>
-            </div>
-          </div>
-
-          <div class="setting">
-            <div class="setting__title">Versione</div>
-            <div class="setting__desc">v5</div>
-            <div class="setting__actions">
-              <a class="link" href="./reset.html">reset.html</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <nav id="bottomNav" class="bottom-nav" role="navigation" aria-label="Navigazione">
-    <button class="bottom-nav__btn" type="button" data-target="registra" aria-current="page">
-      <span class="bottom-nav__label">Registra</span>
-    </button>
-    <button class="bottom-nav__btn" type="button" data-target="lista">
-      <span class="bottom-nav__label">Lista</span>
-    </button>
-    <button class="bottom-nav__btn" type="button" data-target="storico">
-      <span class="bottom-nav__label">Storico</span>
-    </button>
-    <button class="bottom-nav__btn" type="button" data-target="impostazioni">
-      <span class="bottom-nav__label">Impostazioni</span>
-    </button>
-  </nav>
-
-  <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
-
-  <div id="modalHost" class="modal-host" hidden>
-    <div id="modalBackdrop" class="modal-backdrop"></div>
-    <div id="modalPanel" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modal__header">
-        <div id="modalTitle" class="modal__title">—</div>
-      </div>
-      <div id="modalBody" class="modal__body"></div>
-      <div class="modal__footer">
-        <button id="modalCancelBtn" class="btn btn-ghost" type="button">Annulla</button>
-        <button id="modalOkBtn" class="btn btn-primary" type="button">Conferma</button>
-      </div>
+      <button type="button" id="h-reset" class="btn block">Azzera filtri</button>
     </div>
-  </div>
+    <div id="h-summary" class="summary"></div>
+    <div id="historyList"></div>
+  </section>
 
-  <script>
-  (() => {
-    const nav = document.getElementById('bottomNav');
-    const sections = Array.from(document.querySelectorAll('.section'));
-    const btns = Array.from(nav ? nav.querySelectorAll('button[data-target]') : []);
-    const show = (name) => {
-      sections.forEach(s => {
-        const on = s.dataset.section === name;
-        s.hidden = !on;
-      });
-      btns.forEach(b => {
-        const on = b.dataset.target === name;
-        if (on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
-      });
-    };
-    show('registra');
-    if (nav) {
-      nav.addEventListener('click', (e) => {
-        const b = e.target && e.target.closest ? e.target.closest('button[data-target]') : null;
-        if (!b) return;
-        show(b.dataset.target);
-      }, { passive: true });
+  <!-- IMPOSTAZIONI -->
+  <section id="sec-impostazioni" class="section" hidden>
+    <h2>Impostazioni</h2>
+
+    <div class="card">
+      <h3>Backup</h3>
+      <p class="muted" id="lastBackupText"></p>
+      <button type="button" id="btnExport" class="btn primary block">Esporta backup</button>
+      <button type="button" id="btnImport" class="btn block">Importa backup</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <button type="button" id="btnCsv" class="btn block">Esporta CSV</button>
+      <label class="field">Promemoria backup
+        <select id="backupDays">
+          <option value="0">Disattivato</option>
+          <option value="3">Ogni 3 giorni</option>
+          <option value="7">Ogni 7 giorni</option>
+          <option value="14">Ogni 14 giorni</option>
+          <option value="30">Ogni 30 giorni</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="card">
+      <h3>Archiviazione</h3>
+      <p class="muted" id="storageState">Verifica in corso…</p>
+      <p class="muted" id="storageUsage"></p>
+      <button type="button" id="btnPersist" class="btn block">Richiedi archiviazione persistente</button>
+    </div>
+
+    <div class="card">
+      <h3>Installazione</h3>
+      <button type="button" id="btnInstall" class="btn primary block" hidden>Installa app</button>
+      <p class="muted" id="installHelp" hidden>Per installare: Chrome, menu ⋮, "Aggiungi a schermata Home".</p>
+    </div>
+
+    <div class="card">
+      <h3>Dati demo</h3>
+      <p class="muted">Carica circa 6 mesi di acquisti di esempio. I dati demo già presenti vengono sostituiti.</p>
+      <button type="button" id="btnDemo" class="btn block">Carica dati demo</button>
+    </div>
+
+    <div class="card danger-zone">
+      <h3>Zona pericolosa</h3>
+      <p class="muted">Elimina definitivamente tutti i dati salvati sul telefono.</p>
+      <button type="button" id="btnWipe" class="btn danger block">Elimina tutti i dati</button>
+    </div>
+
+    <div class="card">
+      <h3>Informazioni</h3>
+      <p class="muted">Versione: <span id="appVersion">6</span></p>
+      <p><a href="./reset.html">Reset dell'app (cache e service worker)</a></p>
+    </div>
+  </section>
+
+</main>
+
+<datalist id="dl-products"></datalist>
+<datalist id="dl-stores"></datalist>
+
+<nav id="nav" class="nav" aria-label="Navigazione principale">
+  <button type="button" class="nav-btn active" data-sec="registra" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+    <span>Registra</span>
+  </button>
+  <button type="button" class="nav-btn" data-sec="lista">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>
+    <span>Lista</span>
+  </button>
+  <button type="button" class="nav-btn" data-sec="storico">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    <span>Storico</span>
+  </button>
+  <button type="button" class="nav-btn" data-sec="impostazioni">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+    <span>Impostazioni</span>
+  </button>
+</nav>
+
+<div id="toastBox" class="toast-box" aria-live="polite"></div>
+<div id="modalRoot"></div>
+
+<!-- Navigazione: indipendente da app.js -->
+<script>
+(function () {
+  var nav = document.getElementById('nav');
+  if (!nav) return;
+  function show(name) {
+    var secs = document.querySelectorAll('.section');
+    for (var i = 0; i < secs.length; i++) secs[i].hidden = (secs[i].id !== 'sec-' + name);
+    var btns = nav.querySelectorAll('[data-sec]');
+    for (var j = 0; j < btns.length; j++) {
+      var active = btns[j].getAttribute('data-sec') === name;
+      btns[j].classList.toggle('active', active);
+      if (active) btns[j].setAttribute('aria-current', 'page');
+      else btns[j].removeAttribute('aria-current');
     }
+    window.scrollTo(0, 0);
+  }
+  nav.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-sec]') : null;
+    if (b) show(b.getAttribute('data-sec'));
+  });
+})();
+</script>
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
-        try {
-          const hadController = !!navigator.serviceWorker.controller;
-          const reg = await navigator.serviceWorker.register('./sw.js');
-          navigator.serviceWorker.addEventListener('controllerchange', () => {
-            try {
-              if (!hadController) return;
-              if (sessionStorage.getItem('swReloadedV4') === '1') return;
-              sessionStorage.setItem('swReloadedV4','1');
-              location.reload();
-            } catch(_) {}
-          });
-        } catch (err) {
-          console.error(err);
-        }
-      });
-    }
+<!-- Service worker: indipendente da app.js -->
+<script>
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  var hadController = !!navigator.serviceWorker.controller;
+  var reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadController || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function (e) { console.error(e); });
+  });
+})();
+</script>
 
-    let deferredPrompt = null;
-    const installBtn = document.getElementById('installBtn');
-    const isStandalone = () => {
-      return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (navigator.standalone === true);
-    };
-    const hideInstall = () => {
-      if (installBtn) installBtn.hidden = true;
-    };
-    const showInstall = () => {
-      if (!installBtn) return;
-      if (isStandalone()) {
-        installBtn.hidden = true;
-        return;
-      }
-      if (deferredPrompt) installBtn.hidden = false;
-    };
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      showInstall();
-    });
-    window.addEventListener('appinstalled', () => {
-      deferredPrompt = null;
-      hideInstall();
-    });
-    if (installBtn) {
-      installBtn.addEventListener('click', async () => {
-        if (!deferredPrompt) return;
-        try {
-          deferredPrompt.prompt();
-          await deferredPrompt.userChoice;
-        } catch (err) {
-          console.error(err);
-        } finally {
-          deferredPrompt = null;
-          hideInstall();
-        }
-      });
-      showInstall();
-    }
-  })();
-  </script>
-
-  <script src="./js/app.js?v=5" defer></script>
+<script src="./js/app.js?v=6"></script>
 </body>
 </html>

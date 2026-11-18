@@ -1,2271 +1,1257 @@
-/* Spesa Smart v4 */
-const VERSION = 5;
+'use strict';
+/* Spesa Smart – app.js */
+const VERSION = 6;
 
-/* parseNumber: unica funzione per parsing numerico */
+/* ===================== NUMERI ===================== */
 function parseNumber(str) {
-  // v5: supports Italian/EN formats and thousands separators.
-  // Examples:
-  // "0,5" "0.5" ",5" ".5" -> 0.5
-  // "1,49" "1.49" -> 1.49
-  // "1.234,56" -> 1234.56
-  // "1.234.567" -> 1234567
-  // invalid -> NaN
+  if (typeof str === 'number') return isFinite(str) ? str : NaN;
   if (str === null || str === undefined) return NaN;
-  let s = String(str).trim();
+  let s = String(str).replace(/\s+/g, '');
   if (s === '') return NaN;
-  s = s.replace(/\s+/g, '');
-
-  // reject letters
-  if (/[a-zA-Z]/.test(s)) return NaN;
-
-  const hasComma = s.includes(',');
-  const hasDot = s.includes('.');
-
-  if (hasComma && hasDot) {
-    // assume dots are thousands and comma is decimal (it-IT)
-    const lastComma = s.lastIndexOf(',');
-    const intPart = s.slice(0, lastComma).replace(/\./g, '');
-    const decPart = s.slice(lastComma + 1);
-    if (decPart === '') return NaN;
-    s = intPart + '.' + decPart;
-  } else if (hasComma) {
-    // comma decimal
-    const parts = s.split(',');
-    if (parts.length > 2) return NaN;
-    const intPart = parts[0];
-    const decPart = parts[1] ?? '';
-    if (intPart === '' && decPart !== '') s = '0.' + decPart;
-    else if (decPart === '') return NaN;
-    else s = intPart + '.' + decPart;
-  } else if (hasDot) {
-    const parts = s.split('.');
-    if (parts.length === 2) {
-      // decimal dot (en)
-      const intPart = parts[0];
-      const decPart = parts[1];
-      if (intPart === '' && decPart !== '') s = '0.' + decPart;
-      else if (decPart === '') return NaN;
-      else s = intPart + '.' + decPart;
-    } else {
-      // multiple dots => thousands separators
-      s = parts.join('');
-    }
+  if (!/^[+-]?[\d.,]+$/.test(s)) return NaN;
+  let sign = 1;
+  if (s[0] === '-' || s[0] === '+') {
+    if (s[0] === '-') sign = -1;
+    s = s.slice(1);
   }
-
-  const n = Number(s);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-/* Helpers */
-const $ = (sel, root = document) => {
-  try {
-    if (!root) return null;
-    return root.querySelector(sel);
-  } catch (_) {
-    return null;
+  const last = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
+  let intPart = s;
+  let frac = '';
+  if (last >= 0) {
+    intPart = s.slice(0, last).replace(/[.,]/g, '');
+    frac = s.slice(last + 1);
   }
-};
-const $id = (id) => {
-  try { return document.getElementById(id); } catch (_) { return null; }
-};
-function escapeHtml(value) {
-  const s = String(value ?? '');
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-function toProductKey(name) {
-  return String(name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
-}
-function todayLocalYMD() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${da}`;
-}
-function formatDateIT(ymd) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? ''));
-  if (!m) return '';
-  return `${m[3]}/${m[2]}/${m[1]}`;
-}
-function ymdToUTCms(ymd) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? ''));
-  if (!m) return NaN;
-  const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
-  return Date.UTC(y, mo - 1, da);
-}
-function diffDaysUTC(ymdA, ymdB) {
-  const a = ymdToUTCms(ymdA);
-  const b = ymdToUTCms(ymdB);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return NaN;
-  return (b - a) / 86400000;
-}
-function formatMoneyEUR(n) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return '—';
-  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(v);
-}
-function formatNumberInput(n) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return '';
-  let s = String(v);
-  if (s.includes('e') || s.includes('E')) s = v.toFixed(12).replace(/0+$/,'').replace(/\.$/,'');
-  s = s.replace('.', ',');
-  return s;
-}
-function round2(n) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return NaN;
-  return Math.round((v + Number.EPSILON) * 100) / 100;
-}
-function unitBase(unit) {
-  if (unit === 'g' || unit === 'kg') return 'kg';
-  if (unit === 'ml' || unit === 'l') return 'l';
-  return 'pz';
-}
-function qtyToBase(qty, unit) {
-  const q = Number(qty);
-  if (!Number.isFinite(q)) return NaN;
-  if (unit === 'g') return q / 1000;
-  if (unit === 'ml') return q / 1000;
-  return q;
-}
-function unitLabelBase(unit) {
-  const b = unitBase(unit);
-  return b;
-}
-function resetRegisterPrefillTouched() {
-  state.ui.registerPrefillTouched = state.ui.registerPrefillTouched || { category:false, unit:false, brand:false };
-  state.ui.registerPrefillTouched.category = false;
-  state.ui.registerPrefillTouched.unit = false;
-  state.ui.registerPrefillTouched.brand = false;
+  if (intPart === '' && frac === '') return NaN;
+  if (!/^\d*$/.test(intPart) || !/^\d*$/.test(frac)) return NaN;
+  const n = parseFloat((intPart || '0') + (frac ? '.' + frac : ''));
+  return isFinite(n) ? sign * n : NaN;
 }
 
-function unitPrice(totalPrice, qty, unit) {
-  const p = Number(totalPrice);
-  const q = Number(qty);
-  if (!Number.isFinite(p) || !Number.isFinite(q) || q <= 0) return NaN;
-  const qb = qtyToBase(q, unit);
-  if (!Number.isFinite(qb) || qb <= 0) return NaN;
-  return p / qb;
-}
-function computePriceBadge(currUnitPrice, avgUnitPrice) {
-  const c = Number(currUnitPrice);
-  const a = Number(avgUnitPrice);
-  if (!Number.isFinite(c) || !Number.isFinite(a) || a <= 0) return null;
-  const lo = a * 0.95;
-  const hi = a * 1.05;
-  if (c < lo) return { label: 'Buon prezzo', cls: 'badge--ok' };
-  if (c > hi) return { label: 'Sopra la media', cls: 'badge--danger' };
-  return { label: 'In media', cls: 'badge--warn' };
-}
-function csvEscapeField(v) {
-  const s = String(v ?? '');
-  const needQuotes = /[;"\n\r]/.test(s);
-  const escaped = s.replace(/"/g, '""');
-  return needQuotes ? `"${escaped}"` : escaped;
-}
-function computeStoreCheapest(purchases, productKey) {
-  const byStore = new Map();
-  for (const p of purchases) {
-    if (p.productKey !== productKey) continue;
-    if (!p.store) continue;
-    const up = unitPrice(p.price, p.qty, p.unit);
-    if (!Number.isFinite(up)) continue;
-    const base = unitBase(p.unit);
-    const k = `${p.store}||${base}`;
-    const acc = byStore.get(k) || { store: p.store, baseUnit: base, sum: 0, count: 0 };
-    acc.sum += up;
-    acc.count += 1;
-    byStore.set(k, acc);
-  }
-  let best = null;
-  for (const acc of byStore.values()) {
-    const avg = acc.sum / acc.count;
-    if (!best || avg < best.avg) best = { store: acc.store, baseUnit: acc.baseUnit, avg };
-  }
-  return best;
-}
-function computeIntervals(purchases) {
-  const byProduct = new Map();
-  for (const p of purchases) {
-    if (!p.productKey) continue;
-    const arr = byProduct.get(p.productKey) || [];
-    arr.push(p);
-    byProduct.set(p.productKey, arr);
-  }
-  const today = todayLocalYMD();
-  const results = [];
-  const insufficient = [];
-  for (const [productKey, arr] of byProduct.entries()) {
-    const dates = Array.from(new Set(arr.map(x => x.date))).sort();
-    const latest = dates[dates.length - 1];
-    const first = dates[0];
-    const name = arr.slice().sort((a,b)=> (a.date < b.date ? 1 : -1) || (b.createdAt||'').localeCompare(a.createdAt||''))[0].product;
-    const category = arr[arr.length - 1].category || 'Altro';
-    const avgStore = computeStoreCheapest(arr, productKey);
-    if (dates.length < 2) {
-      insufficient.push({ productKey, name, category, latestDate: latest, cheapest: avgStore });
-      continue;
-    }
-    const interval = diffDaysUTC(first, latest) / (dates.length - 1); // may be decimal
-    const intervalRoundedDays = Math.round(interval);
-    const predictedMs = ymdToUTCms(latest) + intervalRoundedDays * 86400000;
-    const predicted = utcMsToYmd(predictedMs);
-    // v5: compute delta using the same displayed predicted date for coherence
-    const delta = Math.round((ymdToUTCms(predicted) - ymdToUTCms(today)) / 86400000);
-    let status = 'Ok';
-    if (delta < 0) status = 'In ritardo';
-    else if (delta <= 3) status = 'A breve';
-    results.push({
-      productKey, name, category,
-      firstDate: first,
-      latestDate: latest,
-      intervalDays: interval,
-      predictedDate: predicted,
-      deltaDays: delta,
-      status,
-      cheapest: avgStore
-    });
-  }
-  return { items: results, insufficient };
-}
-
-/* IndexedDB */
+/* ===================== COSTANTI ===================== */
+const CATEGORIES = ['Frutta e verdura', 'Carne e pesce', 'Latticini', 'Pane e cereali', 'Bevande', 'Surgelati',
+  'Dispensa', 'Casa e pulizia', 'Igiene personale', 'Altro'];
+const DEFAULT_CATEGORY = 'Altro';
+const UNITS = ['pz', 'kg', 'g', 'l', 'ml'];
 const DB_NAME = 'spesaSmartDB';
-const DB_VERSION = 1;
+const STORES = ['purchases', 'listItems', 'settings', 'synonyms'];
+const EUR = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
+const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
 
-function openDb() {
+const state = { purchases: [], listItems: [], settings: {}, synonyms: [] };
+const ui = { listFilter: 'all', storicoLimit: 100, prefillKey: '', bannerDismissed: false, saving: false };
+let db = null;
+let deferredInstall = null;
+
+/* ===================== UTILITÀ ===================== */
+function $(id) { return document.getElementById(id); }
+function on(id, evt, fn) { const e = $(id); if (e) e.addEventListener(evt, fn); }
+function setVal(id, v) { const e = $(id); if (e) e.value = v; }
+function getVal(id) { const e = $(id); return e ? e.value : ''; }
+function setText(id, t) { const e = $(id); if (e) e.textContent = t; }
+function pad(n) { return String(n).padStart(2, '0'); }
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function keyOf(s) { return String(s || '').toLowerCase().trim().replace(/\s+/g, ' '); }
+function uid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+function normCat(c) { return CATEGORIES.indexOf(c) >= 0 ? c : DEFAULT_CATEGORY; }
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+function fmtNum(n) { return String(Math.round(n * 10000) / 10000).replace('.', ','); }
+function fmtPrice(n) { return Number(n).toFixed(2).replace('.', ','); }
+function fmtMoney(n) { return EUR.format(n); }
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1).replace('.', ',') + ' KB';
+  if (b < 1073741824) return (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+  return (b / 1073741824).toFixed(1).replace('.', ',') + ' GB';
+}
+function upsert(arr, rec, k) {
+  const key = k || 'id';
+  const i = arr.findIndex(x => x[key] === rec[key]);
+  if (i >= 0) arr[i] = rec; else arr.push(rec);
+}
+function safe(p) { Promise.resolve(p).catch(e => console.error(e)); }
+
+/* ===================== DATE ===================== */
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+function isValidDate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return false;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  if (y < 1900 || y > 2100) return false;
+  const t = new Date(Date.UTC(y, mo - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d;
+}
+function dayNum(s) {
+  const p = s.split('-').map(Number);
+  return Date.UTC(p[0], p[1] - 1, p[2]) / 86400000;
+}
+function ymdFromDayNum(n) {
+  const d = new Date(n * 86400000);
+  return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+}
+function fmtDate(s) {
+  if (!isValidDate(s)) return String(s || '');
+  return s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4);
+}
+function fmtDateTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+/* ===================== PREZZO UNITARIO ===================== */
+function unitPrice(qty, unit, price) {
+  let q = qty, label = unit;
+  if (unit === 'g') { q = qty / 1000; label = 'kg'; }
+  else if (unit === 'ml') { q = qty / 1000; label = 'l'; }
+  if (!(q > 0) || !isFinite(price)) return null;
+  return { value: price / q, label: label };
+}
+function fmtUnitPrice(u) { return u ? EUR.format(u.value) + '/' + u.label : ''; }
+
+/* ===================== TOAST ===================== */
+let toastTimer = null;
+function toast(msg, opt) {
+  const box = $('toastBox');
+  if (!box) return;
+  clearTimeout(toastTimer);
+  box.innerHTML = '';
+  const t = document.createElement('div');
+  t.className = 'toast' + (opt && opt.kind ? ' ' + opt.kind : '');
+  const sp = document.createElement('span');
+  sp.textContent = msg;
+  t.appendChild(sp);
+  if (opt && opt.action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = opt.action.label;
+    b.addEventListener('click', () => {
+      clearTimeout(toastTimer);
+      box.innerHTML = '';
+      try { opt.action.fn(); } catch (e) { console.error(e); }
+    });
+    t.appendChild(b);
+  }
+  box.appendChild(t);
+  toastTimer = setTimeout(() => { box.innerHTML = ''; }, (opt && opt.duration) || 3000);
+}
+
+/* ===================== MODAL (unico gestore, a Promise) ===================== */
+let modalQueue = Promise.resolve();
+function openModal(opts) {
+  const p = modalQueue.then(() => showModal(opts));
+  modalQueue = p.then(() => undefined, () => undefined);
+  return p;
+}
+function showModal(o) {
+  return new Promise(resolve => {
+    const root = $('modalRoot');
+    if (!root) { resolve({ ok: false, value: null }); return; }
+    const back = document.createElement('div');
+    back.className = 'modal-back';
+    const box = document.createElement('div');
+    box.className = 'modal';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.innerHTML = '<h2>' + esc(o.title || '') + '</h2><div class="modal-body">' + (o.body || '') + '</div>' +
+      '<div class="modal-actions"><button type="button" class="btn" data-act="cancel">' + esc(o.cancelLabel || 'Annulla') + '</button>' +
+      '<button type="button" class="btn ' + (o.danger ? 'danger' : 'primary') + '" data-act="ok">' + esc(o.okLabel || 'Conferma') + '</button></div>';
+    back.appendChild(box);
+    root.appendChild(back);
+    document.body.classList.add('modal-open');
+    let done = false;
+    function close(res) {
+      if (done) return;
+      done = true;
+      document.removeEventListener('keydown', onKey);
+      back.remove();
+      if (!root.querySelector('.modal-back')) document.body.classList.remove('modal-open');
+      resolve(res);
+    }
+    function onKey(e) { if (e.key === 'Escape') close({ ok: false, value: null }); }
+    document.addEventListener('keydown', onKey);
+    back.addEventListener('click', e => { if (e.target === back) close({ ok: false, value: null }); });
+    box.addEventListener('click', e => {
+      const b = e.target.closest ? e.target.closest('[data-act]') : null;
+      if (!b) return;
+      const act = b.getAttribute('data-act');
+      if (act === 'cancel') { close({ ok: false, value: null }); return; }
+      if (act === 'ok') {
+        if (o.validate) {
+          let err = null;
+          try { err = o.validate(box); } catch (ex) { console.error(ex); err = 'Dati non validi'; }
+          if (err) { toast(err, { kind: 'error' }); return; }
+        }
+        let value = true;
+        try { value = o.collect ? o.collect(box) : true; } catch (ex) { console.error(ex); close({ ok: false, value: null }); return; }
+        close({ ok: true, value: value });
+      }
+    });
+    if (o.onOpen) { try { o.onOpen(box); } catch (ex) { console.error(ex); } }
+  });
+}
+function confirmBox(title, bodyHtml, okLabel, danger) {
+  return openModal({ title: title, body: bodyHtml, okLabel: okLabel || 'Conferma', danger: !!danger })
+    .then(r => r.ok);
+}
+
+/* ===================== DATABASE ===================== */
+function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains('purchases')) {
-        const os = db.createObjectStore('purchases', { keyPath: 'id' });
-        os.createIndex('date', 'date', { unique: false });
-        os.createIndex('productKey', 'productKey', { unique: false });
-        os.createIndex('store', 'store', { unique: false });
+    if (!window.indexedDB) { reject(new Error('IndexedDB non disponibile')); return; }
+    const r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      if (!d.objectStoreNames.contains('purchases')) {
+        const s = d.createObjectStore('purchases', { keyPath: 'id' });
+        s.createIndex('date', 'date');
+        s.createIndex('productKey', 'productKey');
+        s.createIndex('store', 'store');
       }
-      if (!db.objectStoreNames.contains('listItems')) {
-        db.createObjectStore('listItems', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('settings')) {
-        db.createObjectStore('settings', { keyPath: 'key' });
-      }
-      if (!db.objectStoreNames.contains('synonyms')) {
-        db.createObjectStore('synonyms', { keyPath: 'alias' });
-      }
+      if (!d.objectStoreNames.contains('listItems')) d.createObjectStore('listItems', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'key' });
+      if (!d.objectStoreNames.contains('synonyms')) d.createObjectStore('synonyms', { keyPath: 'alias' });
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    r.onsuccess = () => {
+      const d = r.result;
+      d.onversionchange = () => { d.close(); db = null; };
+      d.onclose = () => { db = null; };
+      resolve(d);
+    };
+    r.onerror = () => reject(r.error);
+    r.onblocked = () => reject(new Error('Database bloccato'));
   });
 }
-function txDone(tx) {
+async function ensureDB() {
+  if (!db) db = await openDB();
+  return db;
+}
+async function dbWrite(ops) {
+  if (!ops.length) return;
+  await ensureDB();
+  const names = Array.from(new Set(ops.map(o => o.store)));
+  await new Promise((resolve, reject) => {
+    const t = db.transaction(names, 'readwrite');
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error('Transazione annullata'));
+    try {
+      ops.forEach(o => {
+        const s = t.objectStore(o.store);
+        if (o.clear) s.clear();
+        else if (Object.prototype.hasOwnProperty.call(o, 'del')) s.delete(o.del);
+        else s.put(o.put);
+      });
+    } catch (e) {
+      try { t.abort(); } catch (x) { /* ignora */ }
+      reject(e);
+    }
+  });
+}
+async function loadAll() {
+  await ensureDB();
   return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onabort = () => reject(tx.error || new Error('tx abort'));
-    tx.onerror = () => reject(tx.error || new Error('tx error'));
+    const t = db.transaction(STORES, 'readonly');
+    const out = {};
+    STORES.forEach(n => {
+      const r = t.objectStore(n).getAll();
+      r.onsuccess = () => { out[n] = r.result; };
+    });
+    t.oncomplete = () => resolve(out);
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error('Lettura annullata'));
   });
 }
-async function dbGetAll(db, store) {
-  const tx = db.transaction(store, 'readonly');
-  const os = tx.objectStore(store);
-  const req = os.getAll();
-  const out = await new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
+async function reloadState() {
+  const out = await loadAll();
+  state.purchases = out.purchases || [];
+  state.listItems = out.listItems || [];
+  state.synonyms = out.synonyms || [];
+  state.settings = {};
+  (out.settings || []).forEach(s => { if (s && typeof s.key === 'string') state.settings[s.key] = s.value; });
+}
+function getSetting(k, def) {
+  return Object.prototype.hasOwnProperty.call(state.settings, k) ? state.settings[k] : def;
+}
+async function setSetting(k, v) {
+  try { await dbWrite([{ store: 'settings', put: { key: k, value: v } }]); }
+  catch (e) { console.error(e); toast("Impossibile salvare l'impostazione", { kind: 'error' }); return false; }
+  state.settings[k] = v;
+  renderAll();
+  return true;
+}
+
+/* ===================== ACQUISTI: LOGICA ===================== */
+function cmpPurchase(a, b) {
+  return String(b.date).localeCompare(String(a.date)) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+}
+function sortedPurchases() { return state.purchases.slice().sort(cmpPurchase); }
+function purchasesOf(key) { return state.purchases.filter(p => p.productKey === key).sort(cmpPurchase); }
+function lastPurchase(key) { return purchasesOf(key)[0] || null; }
+function avgUnitPrice(key, label) {
+  let sum = 0, n = 0;
+  state.purchases.forEach(p => {
+    if (p.productKey !== key) return;
+    const u = unitPrice(p.qty, p.unit, p.price);
+    if (u && u.label === label) { sum += u.value; n++; }
   });
-  await txDone(tx);
+  return n ? sum / n : null;
+}
+function buildPurchase(v) {
+  const product = String(v.product || '').trim().replace(/\s+/g, ' ');
+  if (!product) return { error: 'Inserisci il nome del prodotto' };
+  const qty = parseNumber(v.qty);
+  if (!(qty > 0)) return { error: 'La quantità deve essere maggiore di zero' };
+  const price = parseNumber(v.price);
+  if (!(price >= 0)) return { error: 'Inserisci un prezzo valido (0 o più)' };
+  if (!isValidDate(v.date)) return { error: 'Data non valida' };
+  return {
+    data: {
+      product: product,
+      productKey: keyOf(product),
+      category: normCat(v.category),
+      qty: Math.round(qty * 10000) / 10000,
+      unit: UNITS.indexOf(v.unit) >= 0 ? v.unit : 'pz',
+      price: round2(price),
+      date: v.date,
+      store: String(v.store || '').trim(),
+      brand: String(v.brand || '').trim(),
+      notes: String(v.notes || '').trim()
+    }
+  };
+}
+function makePurchase(data, old) {
+  const now = new Date().toISOString();
+  return Object.assign({
+    id: old ? old.id : uid(),
+    receiptId: old && old.receiptId !== undefined ? old.receiptId : null,
+    createdAt: old ? old.createdAt : now,
+    updatedAt: now
+  }, data);
+}
+async function storePurchase(p, extras, noReset) {
+  const list = (extras || []).slice();
+  const aid = 'auto:' + p.productKey;
+  if (!noReset && !list.some(x => x.id === aid)) {
+    const ex = state.listItems.find(i => i.id === aid);
+    if (ex && (ex.checked || ex.hiddenUntilPurchase)) list.push({ id: aid, checked: false, hiddenUntilPurchase: false });
+  }
+  const ops = [{ store: 'purchases', put: p }].concat(list.map(r => ({ store: 'listItems', put: r })));
+  try { await dbWrite(ops); } catch (e) { console.error(e); return false; }
+  upsert(state.purchases, p);
+  list.forEach(r => upsert(state.listItems, r));
+  renderAll();
+  return true;
+}
+async function askDeletePurchase(id) {
+  const p = state.purchases.find(x => x.id === id);
+  if (!p) return;
+  const ok = await confirmBox("Eliminare l'acquisto?",
+    '<p><strong>' + esc(p.product) + '</strong><br>' + esc(fmtDate(p.date)) + ' · ' + esc(fmtMoney(p.price)) + '</p>',
+    'Elimina', true);
+  if (!ok) return;
+  try { await dbWrite([{ store: 'purchases', del: p.id }]); }
+  catch (e) { console.error(e); toast("Impossibile eliminare l'acquisto", { kind: 'error' }); return; }
+  state.purchases = state.purchases.filter(x => x.id !== p.id);
+  renderAll();
+  toast('Acquisto eliminato', { duration: 5000, action: { label: 'Annulla', fn: () => safe(undoDeletePurchase(p)) } });
+}
+async function undoDeletePurchase(p) {
+  try { await dbWrite([{ store: 'purchases', put: p }]); }
+  catch (e) { console.error(e); toast("Impossibile ripristinare l'acquisto", { kind: 'error' }); return; }
+  upsert(state.purchases, p);
+  renderAll();
+  toast('Acquisto ripristinato');
+}
+
+/* ===================== FORM ACQUISTO (modal) ===================== */
+function optionsHtml(list, sel) {
+  return list.map(x => '<option value="' + esc(x) + '"' + (x === sel ? ' selected' : '') + '>' + esc(x) + '</option>').join('');
+}
+function formHtml(v) {
+  return '<div class="form">' +
+    '<label class="field">Prodotto *<input name="product" type="text" list="dl-products" autocomplete="off" value="' + esc(v.product) + '"></label>' +
+    '<label class="field">Categoria<select name="category">' + optionsHtml(CATEGORIES, normCat(v.category)) + '</select></label>' +
+    '<div class="grid2">' +
+    '<label class="field">Quantità *<input name="qty" type="text" inputmode="decimal" value="' + esc(v.qty) + '"></label>' +
+    '<label class="field">Unità<select name="unit">' + optionsHtml(UNITS, v.unit) + '</select></label>' +
+    '</div>' +
+    '<label class="field">Prezzo totale € *<input name="price" type="text" inputmode="decimal" value="' + esc(v.price) + '"></label>' +
+    '<label class="field">Data acquisto *<input name="date" type="date" value="' + esc(v.date) + '"></label>' +
+    '<label class="field">Negozio<input name="store" type="text" list="dl-stores" autocomplete="off" value="' + esc(v.store) + '"></label>' +
+    '<label class="field">Marca<input name="brand" type="text" autocomplete="off" value="' + esc(v.brand) + '"></label>' +
+    '<label class="field">Note<input name="notes" type="text" autocomplete="off" value="' + esc(v.notes) + '"></label>' +
+    '</div>';
+}
+function readForm(box) {
+  const g = n => { const e = box.querySelector('[name="' + n + '"]'); return e ? e.value : ''; };
+  return { product: g('product'), category: g('category'), qty: g('qty'), unit: g('unit'), price: g('price'),
+    date: g('date'), store: g('store'), brand: g('brand'), notes: g('notes') };
+}
+function purchaseModal(title, okLabel, v) {
+  return openModal({
+    title: title,
+    body: formHtml(v),
+    okLabel: okLabel,
+    validate: box => buildPurchase(readForm(box)).error || null,
+    collect: box => buildPurchase(readForm(box)).data
+  });
+}
+async function editPurchase(id) {
+  const p = state.purchases.find(x => x.id === id);
+  if (!p) return;
+  const r = await purchaseModal('Modifica acquisto', 'Salva', {
+    product: p.product, category: p.category, qty: fmtNum(p.qty), unit: p.unit, price: fmtPrice(p.price),
+    date: p.date, store: p.store || '', brand: p.brand || '', notes: p.notes || ''
+  });
+  if (!r.ok) return;
+  const ok = await storePurchase(makePurchase(r.value, p), [], true);
+  if (ok) toast('Acquisto aggiornato');
+  else toast("Impossibile aggiornare l'acquisto", { kind: 'error' });
+}
+
+/* ===================== REGISTRA ===================== */
+function readReg() {
+  return { product: getVal('f-product'), category: getVal('f-category'), qty: getVal('f-qty'), unit: getVal('f-unit'),
+    price: getVal('f-price'), date: getVal('f-date'), store: getVal('f-store'), brand: getVal('f-brand'), notes: getVal('f-notes') };
+}
+function resetRegForm() {
+  setVal('f-product', '');
+  setVal('f-category', DEFAULT_CATEGORY);
+  setVal('f-qty', '1');
+  setVal('f-unit', 'pz');
+  setVal('f-price', '');
+  setVal('f-date', todayStr());
+  setVal('f-store', '');
+  setVal('f-brand', '');
+  setVal('f-notes', '');
+  ui.prefillKey = '';
+  refreshRegHints();
+  const p = $('f-product');
+  if (p) p.focus();
+}
+function maybePrefill() {
+  const key = keyOf(getVal('f-product'));
+  const last = key ? lastPurchase(key) : null;
+  if (!last) { ui.prefillKey = ''; return; }
+  if (ui.prefillKey === key) return;
+  ui.prefillKey = key;
+  setVal('f-category', normCat(last.category));
+  setVal('f-unit', last.unit);
+  setVal('f-brand', last.brand || '');
+}
+function refreshRegHints() {
+  const v = readReg();
+  const key = keyOf(v.product);
+  const last = key ? lastPurchase(key) : null;
+  const li = $('lastInfo');
+  if (li) {
+    if (last) {
+      const u = unitPrice(last.qty, last.unit, last.price);
+      li.innerHTML = '<strong>Ultimo acquisto</strong>: ' + esc(fmtDate(last.date)) +
+        (last.store ? ' · ' + esc(last.store) : '') + ' · ' + esc(fmtMoney(last.price)) +
+        (u ? ' · ' + esc(fmtUnitPrice(u)) : '');
+      li.hidden = false;
+    } else { li.innerHTML = ''; li.hidden = true; }
+  }
+  const qty = parseNumber(v.qty);
+  const price = parseNumber(v.price);
+  const cur = (qty > 0 && price >= 0) ? unitPrice(qty, v.unit, price) : null;
+  const row = $('unitPriceRow');
+  const val = $('unitPriceVal');
+  if (row && val) {
+    if (cur) { val.textContent = fmtUnitPrice(cur); row.hidden = false; }
+    else { val.textContent = ''; row.hidden = true; }
+  }
+  const badge = $('priceBadge');
+  if (badge) {
+    badge.hidden = true; badge.textContent = ''; badge.className = 'badge';
+    if (cur && key) {
+      const avg = avgUnitPrice(key, cur.label);
+      if (avg !== null && avg > 0) {
+        if (cur.value <= avg * 0.95) { badge.textContent = 'Buon prezzo'; badge.className = 'badge good'; }
+        else if (cur.value >= avg * 1.05) { badge.textContent = 'Sopra la media'; badge.className = 'badge high'; }
+        else { badge.textContent = 'In media'; badge.className = 'badge avg'; }
+        badge.hidden = false;
+      }
+    }
+  }
+}
+async function onRegSubmit(e) {
+  e.preventDefault();
+  if (ui.saving) return;
+  const r = buildPurchase(readReg());
+  if (r.error) { toast(r.error, { kind: 'error' }); return; }
+  ui.saving = true;
+  let ok = false;
+  try { ok = await storePurchase(makePurchase(r.data)); } finally { ui.saving = false; }
+  if (ok) { toast('Acquisto salvato'); resetRegForm(); }
+  else toast("Impossibile salvare l'acquisto", { kind: 'error' });
+}
+function renderRecent() {
+  const c = $('recentList');
+  if (!c) return;
+  const list = sortedPurchases().slice(0, 8);
+  if (!list.length) { c.innerHTML = '<p class="muted">Nessun acquisto registrato.</p>'; return; }
+  c.innerHTML = list.map(p =>
+    '<div class="row"><div class="row-main"><div class="row-title">' + esc(p.product) + '</div>' +
+    '<div class="row-sub">' + esc(fmtDate(p.date)) + (p.store ? ' · ' + esc(p.store) : '') + '</div></div>' +
+    '<div class="row-price">' + esc(fmtMoney(p.price)) + '</div>' +
+    '<button type="button" class="icon-btn" data-act="del" data-id="' + esc(p.id) + '" aria-label="Elimina acquisto">' + TRASH + '</button></div>'
+  ).join('');
+}
+function renderDatalists() {
+  const prods = new Map();
+  const stores = new Map();
+  state.purchases.forEach(p => {
+    if (!prods.has(p.productKey)) prods.set(p.productKey, p.product);
+    if (p.store) { const k = keyOf(p.store); if (!stores.has(k)) stores.set(k, p.store); }
+  });
+  const fill = (id, map) => {
+    const dl = $(id);
+    if (!dl) return;
+    const arr = Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'it'));
+    dl.innerHTML = arr.map(x => '<option value="' + esc(x) + '"></option>').join('');
+  };
+  fill('dl-products', prods);
+  fill('dl-stores', stores);
+}
+
+/* ===================== LISTA ===================== */
+function computeAuto() {
+  const byKey = new Map();
+  state.purchases.forEach(p => {
+    let a = byKey.get(p.productKey);
+    if (!a) { a = []; byKey.set(p.productKey, a); }
+    a.push(p);
+  });
+  const today = dayNum(todayStr());
+  const out = [];
+  byKey.forEach((arr, key) => {
+    arr.sort(cmpPurchase);
+    const last = arr[0];
+    const dates = Array.from(new Set(arr.map(p => p.date))).sort();
+    const st = state.listItems.find(i => i.id === 'auto:' + key) || null;
+    const it = {
+      kind: 'auto', id: 'auto:' + key, key: key, name: last.product, category: normCat(last.category),
+      lastDate: last.date, checked: !!(st && st.checked), hidden: !!(st && st.hiddenUntilPurchase),
+      status: 'insuf', nextDate: null, days: null, cheapest: null
+    };
+    if (dates.length >= 2) {
+      const interval = (dayNum(dates[dates.length - 1]) - dayNum(dates[0])) / (dates.length - 1);
+      const next = Math.round(dayNum(it.lastDate) + interval);
+      it.nextDate = ymdFromDayNum(next);
+      it.days = next - today;
+      it.status = it.days < 0 ? 'late' : (it.days <= 3 ? 'soon' : 'ok');
+    }
+    const lu = unitPrice(last.qty, last.unit, last.price);
+    if (lu) {
+      const m = new Map();
+      arr.forEach(p => {
+        if (!p.store) return;
+        const u = unitPrice(p.qty, p.unit, p.price);
+        if (!u || u.label !== lu.label) return;
+        let e = m.get(p.store);
+        if (!e) { e = { sum: 0, n: 0 }; m.set(p.store, e); }
+        e.sum += u.value; e.n++;
+      });
+      let best = null;
+      m.forEach((e, s) => { const avg = e.sum / e.n; if (!best || avg < best.avg) best = { store: s, avg: avg }; });
+      if (best) it.cheapest = { store: best.store, text: EUR.format(best.avg) + '/' + lu.label };
+    }
+    out.push(it);
+  });
   return out;
 }
-async function dbPut(db, store, value) {
-  const tx = db.transaction(store, 'readwrite');
-  tx.objectStore(store).put(value);
-  await txDone(tx);
+function daysText(i) {
+  if (i.days === null) return '';
+  if (i.days < 0) return (-i.days) + (i.days === -1 ? ' giorno' : ' giorni') + ' di ritardo';
+  if (i.days === 0) return 'previsto oggi';
+  return 'tra ' + i.days + (i.days === 1 ? ' giorno' : ' giorni');
 }
-async function dbDelete(db, store, key) {
-  const tx = db.transaction(store, 'readwrite');
-  tx.objectStore(store).delete(key);
-  await txDone(tx);
+function itemHtml(i) {
+  const pill = i.status === 'late' ? '<span class="pill late">In ritardo</span>'
+    : i.status === 'soon' ? '<span class="pill soon">A breve</span>'
+    : i.status === 'ok' ? '<span class="pill ok">Ok</span>'
+    : i.status === 'manual' ? '<span class="pill manual">Manuale</span>' : '';
+  let sub = '';
+  if (i.kind === 'manual') sub = '<div class="item-sub">Voce manuale</div>';
+  else if (i.status === 'insuf') sub = '<div class="item-sub">Ultimo acquisto: ' + esc(fmtDate(i.lastDate)) + ' · dati insufficienti per la stima</div>';
+  else sub = '<div class="item-sub">Ultimo: ' + esc(fmtDate(i.lastDate)) + ' · Previsto: ' + esc(fmtDate(i.nextDate)) + ' · ' + esc(daysText(i)) + '</div>';
+  if (i.cheapest) sub += '<div class="item-sub">Più conveniente: ' + esc(i.cheapest.store) + ' (' + esc(i.cheapest.text) + ')</div>';
+  return '<div class="item' + (i.checked ? ' is-checked' : '') + '" data-id="' + esc(i.id) + '">' +
+    '<label class="chk"><input type="checkbox" data-act="check"' + (i.checked ? ' checked' : '') + ' aria-label="Spunta"></label>' +
+    '<div class="item-main"><div class="item-name">' + esc(i.name) + pill + '</div>' + sub + '</div>' +
+    '<button type="button" class="btn small" data-act="save">Salva</button>' +
+    (i.kind === 'manual' ? '<button type="button" class="icon-btn" data-act="delmanual" aria-label="Elimina voce">' + TRASH + '</button>' : '') +
+    '</div>';
 }
-async function dbClear(db, store) {
-  const tx = db.transaction(store, 'readwrite');
-  tx.objectStore(store).clear();
-  await txDone(tx);
+function getListItems() {
+  const auto = computeAuto().filter(i => !i.hidden);
+  const manual = state.listItems.filter(i => !String(i.id).startsWith('auto:')).map(i => ({
+    kind: 'manual', id: i.id, key: i.productKey || keyOf(i.name), name: i.name, category: normCat(i.category),
+    checked: !!i.checked, status: 'manual', days: null
+  }));
+  return { auto: auto, all: auto.concat(manual) };
 }
-
-/* State */
-const state = {
-  db: null,
-  purchases: [],
-  listItems: [],
-  settings: new Map(),
-  synonyms: [],
-  ui: {
-    listFilter: 'all',
-    registerPrefillTouched: {
-      category: false,
-      unit: false,
-      brand: false
-    },
-    registerLastKnownKey: ''
-  }
-};
-
-function sortPurchases(arr) {
-  return arr.slice().sort((a,b) => {
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    const ac = a.createdAt || '';
-    const bc = b.createdAt || '';
-    if (ac !== bc) return bc.localeCompare(ac);
-    return String(b.id).localeCompare(String(a.id));
+function renderLista() {
+  const c = $('listContainer');
+  if (!c) return;
+  const data = getListItems();
+  let late = 0, soon = 0, ok = 0;
+  data.auto.forEach(i => { if (i.status === 'late') late++; else if (i.status === 'soon') soon++; else if (i.status === 'ok') ok++; });
+  setText('cnt-late', String(late));
+  setText('cnt-soon', String(soon));
+  setText('cnt-ok', String(ok));
+  const fb = $('listFilter');
+  if (fb) fb.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.getAttribute('data-filter') === ui.listFilter));
+  let items = data.all;
+  if (ui.listFilter === 'buy') items = items.filter(i => i.status === 'late' || i.status === 'soon' || i.status === 'manual');
+  const rank = { manual: 0, late: 1, soon: 2, ok: 3, insuf: 4 };
+  const cmp = (a, b) => (rank[a.status] - rank[b.status]) || ((a.days || 0) - (b.days || 0)) || a.name.localeCompare(b.name, 'it');
+  let html = '';
+  CATEGORIES.forEach(cat => {
+    const g = items.filter(i => i.category === cat && i.status !== 'insuf').sort(cmp);
+    if (g.length) html += '<div class="group-title">' + esc(cat) + '</div>' + g.map(itemHtml).join('');
   });
+  const ins = items.filter(i => i.status === 'insuf').sort((a, b) => a.name.localeCompare(b.name, 'it'));
+  if (ins.length) html += '<div class="group-title">Dati insufficienti</div>' + ins.map(itemHtml).join('');
+  if (!html) html = '<p class="muted">Nessuna voce. Registra qualche acquisto o aggiungi un prodotto a mano.</p>';
+  c.innerHTML = html;
 }
-function setPurchases(newArr) {
-  state.purchases = sortPurchases(newArr);
+async function toggleCheck(id, checked) {
+  const ex = state.listItems.find(i => i.id === id);
+  let rec;
+  if (String(id).startsWith('auto:')) rec = { id: id, checked: checked, hiddenUntilPurchase: ex ? !!ex.hiddenUntilPurchase : false };
+  else { if (!ex) return; rec = Object.assign({}, ex, { checked: checked }); }
+  try { await dbWrite([{ store: 'listItems', put: rec }]); }
+  catch (e) { console.error(e); toast('Impossibile aggiornare la voce', { kind: 'error' }); renderAll(); return; }
+  upsert(state.listItems, rec);
+  renderAll();
 }
-function setListItems(newArr) {
-  state.listItems = newArr.slice().sort((a,b)=> String(a.id).localeCompare(String(b.id)));
-}
-function getSetting(key, fallback) {
-  if (state.settings.has(key)) return state.settings.get(key);
-  return fallback;
-}
-async function setSetting(key, value) {
-  try {
-    await dbPut(state.db, 'settings', { key, value });
-    state.settings.set(key, value);
-    renderAll();
-  } catch (e) {
-    console.error(e);
-    showToast('Impossibile salvare le impostazioni');
-  }
-}
-
-function showToast(message, opts = {}) {
-  const host = $id('toastHost');
-  if (!host) return;
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  const msg = document.createElement('div');
-  msg.className = 'toast__msg';
-  msg.textContent = String(message);
-  const actions = document.createElement('div');
-  actions.className = 'toast__actions';
-  let timer = null;
-
-  if (opts.actionText && typeof opts.onAction === 'function') {
-    const btn = document.createElement('button');
-    btn.className = 'toast__btn';
-    btn.type = 'button';
-    btn.textContent = opts.actionText;
-    btn.addEventListener('click', () => {
-      try { opts.onAction(); } catch (e) { console.error(e); }
-      if (timer) clearTimeout(timer);
-      toast.remove();
-    }, { passive: true });
-    actions.appendChild(btn);
-  }
-  const close = document.createElement('button');
-  close.className = 'toast__btn';
-  close.type = 'button';
-  close.textContent = 'Ok';
-  close.addEventListener('click', () => toast.remove(), { passive: true });
-  actions.appendChild(close);
-
-  toast.appendChild(msg);
-  toast.appendChild(actions);
-  host.appendChild(toast);
-  const ms = Number(opts.ms || 5000);
-  timer = setTimeout(() => { try { toast.remove(); } catch(_){} }, ms);
-}
-
-const modalQueue = [];
-let modalOpen = false;
-
-function openModal(config) {
-  return new Promise((resolve) => {
-    modalQueue.push({ config, resolve });
-    pumpModalQueue();
-  });
-}
-
-function pumpModalQueue() {
-  if (modalOpen) return;
-  const item = modalQueue.shift();
-  if (!item) return;
-  modalOpen = true;
-  const { config, resolve } = item;
-
-  const host = $id('modalHost');
-  const backdrop = $id('modalBackdrop');
-  const panel = $id('modalPanel');
-  const title = $id('modalTitle');
-  const body = $id('modalBody');
-  const btnCancel = $id('modalCancelBtn');
-  const btnOk = $id('modalOkBtn');
-  if (!host || !backdrop || !panel || !title || !body || !btnCancel || !btnOk) {
-    modalOpen = false;
-    resolve({ ok: false, reason: 'missing modal dom' });
-    pumpModalQueue();
-    return;
-  }
-
-  const closeModal = (result) => {
-    host.hidden = true;
-    body.innerHTML = '';
-    title.textContent = '—';
-    btnOk.textContent = 'Conferma';
-    btnOk.className = 'btn btn-primary';
-    btnOk.disabled = false;
-    btnCancel.textContent = 'Annulla';
-    btnCancel.disabled = false;
-    backdrop.onclick = null;
-    btnCancel.onclick = null;
-    btnOk.onclick = null;
-    host.onkeydown = null;
-    modalOpen = false;
-    resolve(result);
-    pumpModalQueue();
-  };
-
-  title.textContent = String(config.title || 'Conferma');
-  body.innerHTML = config.bodyHtml || '';
-  btnOk.textContent = String(config.okText || 'Conferma');
-  btnCancel.textContent = String(config.cancelText || 'Annulla');
-  if (config.okClass === 'danger') btnOk.className = 'btn btn-danger';
-
-  const cancel = () => closeModal({ ok: false });
-  const ok = () => {
-    try {
-      if (typeof config.validate === 'function') {
-        const msg = config.validate();
-        if (msg) {
-          showToast(msg);
-          return;
-        }
-      }
-      const value = typeof config.getValue === 'function' ? config.getValue() : null;
-      closeModal({ ok: true, value });
-    } catch (e) {
-      console.error(e);
-      showToast('Impossibile completare l’operazione');
-    }
-  };
-
-  backdrop.onclick = cancel;
-  btnCancel.onclick = cancel;
-  btnOk.onclick = ok;
-  host.onkeydown = (e) => {
-    if (e.key === 'Escape') cancel();
-  };
-
-  host.hidden = false;
-
-  const first = body.querySelector('input,select,textarea,button');
-  if (first && first.focus) setTimeout(() => { try { first.focus(); } catch(_){} }, 0);
-}
-
-/* App logic */
-function getLastPurchaseForKey(productKey) {
-  for (const p of state.purchases) if (p.productKey === productKey) return p;
-  return null;
-}
-function getUnitAvgForKey(productKey, baseUnit) {
-  let sum = 0, count = 0;
-  for (const p of state.purchases) {
-    if (p.productKey !== productKey) continue;
-    if (unitBase(p.unit) !== baseUnit) continue;
-    const up = unitPrice(p.price, p.qty, p.unit);
-    if (!Number.isFinite(up)) continue;
-    sum += up; count++;
-  }
-  if (count === 0) return NaN;
-  return sum / count;
-}
-
-async function ensureAutoListReset(productKey) {
-  const autoId = `auto:${productKey}`;
-  const item = state.listItems.find(x => x.id === autoId);
-  if (!item) return;
-  if (!item.hiddenUntilPurchase) return;
-  const updated = { ...item, hiddenUntilPurchase: false };
-  try {
-    await dbPut(state.db, 'listItems', updated);
-    setListItems(state.listItems.map(x => x.id === autoId ? updated : x));
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function addPurchase(purchase) {
-  try {
-    await dbPut(state.db, 'purchases', purchase);
-    setPurchases([purchase, ...state.purchases.filter(p => p.id !== purchase.id)]);
-    await ensureAutoListReset(purchase.productKey);
-    renderAll();
-    return true;
-  } catch (e) {
-    console.error(e);
-    showToast('Impossibile salvare l’acquisto');
-    return false;
-  }
-}
-
-async function deletePurchase(id) {
-  const existing = state.purchases.find(p => p.id === id);
-  if (!existing) return null;
-  try {
-    await dbDelete(state.db, 'purchases', id);
-    setPurchases(state.purchases.filter(p => p.id !== id));
-    renderAll();
-    return existing;
-  } catch (e) {
-    console.error(e);
-    showToast('Impossibile eliminare l’acquisto');
-    return null;
-  }
-}
-
-async function restorePurchase(purchase) {
-  try {
-    await dbPut(state.db, 'purchases', purchase);
-    setPurchases([purchase, ...state.purchases.filter(p => p.id !== purchase.id)]);
-    renderAll();
-    return true;
-  } catch (e) {
-    console.error(e);
-    showToast('Impossibile ripristinare l’acquisto');
-    return false;
-  }
-}
-
-function buildTrashIconSvg() {
-  return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 3h6l1 2h5v2H3V5h5l1-2Zm1 7h2v9h-2v-9Zm4 0h2v9h-2v-9ZM6 8h12l-1 13H7L6 8Z"/></svg>';
-}
-
-function updateRegisterUnitPrice() {
-  const qtyEl = $id('qtyInput');
-  const unitEl = $id('unitSelect');
-  const priceEl = $id('priceInput');
-  const row = $id('unitPriceRow');
-  const txt = $id('unitPriceText');
-  if (!qtyEl || !unitEl || !priceEl || !row || !txt) return;
-
-  const qty = parseNumber(qtyEl.value);
-  const price = parseNumber(priceEl.value);
-  const unit = unitEl.value;
-  const up = unitPrice(price, qty, unit);
-  if (Number.isFinite(up)) {
-    row.hidden = false;
-    const base = unitLabelBase(unit);
-    txt.textContent = `${formatMoneyEUR(round2(up))}/${base}`;
-  } else {
-    row.hidden = true;
-    txt.textContent = '—';
-  }
-  updateRegisterBadge();
-}
-
-function updateRegisterBadge() {
-  const badgeRow = $id('priceBadgeRow');
-  const badgeEl = $id('priceBadge');
-  const badgeDetails = $id('priceBadgeDetails');
-  const prodEl = $id('productInput');
-  const qtyEl = $id('qtyInput');
-  const unitEl = $id('unitSelect');
-  const priceEl = $id('priceInput');
-  if (!badgeRow || !badgeEl || !badgeDetails || !prodEl || !qtyEl || !unitEl || !priceEl) return;
-
-  const key = toProductKey(prodEl.value);
-  if (!key) {
-    badgeRow.hidden = true;
-    return;
-  }
-  const qty = parseNumber(qtyEl.value);
-  const price = parseNumber(priceEl.value);
-  const unit = unitEl.value;
-  const up = unitPrice(price, qty, unit);
-  const avg = getUnitAvgForKey(key, unitBase(unit));
-  const b = computePriceBadge(up, avg);
-  if (!b) {
-    badgeRow.hidden = true;
-    return;
-  }
-  badgeRow.hidden = false;
-  badgeEl.className = `badge ${b.cls}`;
-  badgeEl.textContent = b.label;
-  badgeDetails.textContent = `Media: ${formatMoneyEUR(round2(avg))}/${unitBase(unit)}`;
-}
-
-function updateRegisterLastPurchase() {
-  const prodEl = $id('productInput');
-  const currentKey = normalizeProductKey(prodEl ? prodEl.value : '');
-  if (state.ui.lastPrefillProductKey !== currentKey) {
-    state.ui.lastPrefillProductKey = currentKey;
-    resetRegisterPrefillTouched();
-  }
-  
-  const card = $id('lastPurchaseCard');
-  const txt = $id('lastPurchaseText');
-  if (!prodEl || !card || !txt) return;
-  const key = toProductKey(prodEl.value);
-  if (!key) {
-    card.hidden = true;
-    txt.textContent = '';
-    return;
-  }
-  const last = getLastPurchaseForKey(key);
-  if (!last) {
-    card.hidden = true;
-    txt.textContent = '';
-    return;
-  }
-  const up = unitPrice(last.price, last.qty, last.unit);
-  const upTxt = Number.isFinite(up) ? `${formatMoneyEUR(round2(up))}/${unitBase(last.unit)}` : '—';
-  txt.textContent = `${formatDateIT(last.date)} • ${last.store || '—'} • ${formatMoneyEUR(last.price)} • ${upTxt}`;
-
-  // Prefill (only if user hasn't touched)
-  if (state.ui.registerLastKnownKey !== key) {
-    const catEl = $id('categorySelect');
-    const unitEl = $id('unitSelect');
-    const brandEl = $id('brandInput');
-    if (catEl && !state.ui.registerPrefillTouched.category) catEl.value = last.category || catEl.value;
-    if (unitEl && !state.ui.registerPrefillTouched.unit) unitEl.value = last.unit || unitEl.value;
-    if (brandEl && !state.ui.registerPrefillTouched.brand) brandEl.value = last.brand || '';
-    state.ui.registerLastKnownKey = key;
-    updateRegisterUnitPrice();
-  }
-
-  card.hidden = false;
-}
-
-function resetRegisterForm() {
-  const product = $id('productInput');
-  const category = $id('categorySelect');
-  const qty = $id('qtyInput');
-  const unit = $id('unitSelect');
-  const price = $id('priceInput');
-  const date = $id('dateInput');
-  const store = $id('storeInput');
-  const brand = $id('brandInput');
-  const notes = $id('notesInput');
-  if (product) product.value = '';
-  if (category) category.value = 'Altro';
-  if (qty) qty.value = '1';
-  if (unit) unit.value = 'pz';
-  if (price) price.value = '';
-  if (date) date.value = todayLocalYMD();
-  if (store) store.value = '';
-  if (brand) brand.value = '';
-  if (notes) notes.value = '';
-  state.ui.registerPrefillTouched = { category: false, unit: false, brand: false };
-  state.ui.registerLastKnownKey = '';
-  const lastCard = $id('lastPurchaseCard');
-  const lastTxt = $id('lastPurchaseText');
-  if (lastCard) lastCard.hidden = true;
-  if (lastTxt) lastTxt.textContent = '';
-  const badgeRow = $id('priceBadgeRow');
-  if (badgeRow) badgeRow.hidden = true;
-  const unitPriceRow = $id('unitPriceRow');
-  if (unitPriceRow) unitPriceRow.hidden = true;
-  if (product && product.focus) product.focus();
-}
-
-function getRegisterFormData() {
-  const productEl = $id('productInput');
-  const categoryEl = $id('categorySelect');
-  const qtyEl = $id('qtyInput');
-  const unitEl = $id('unitSelect');
-  const priceEl = $id('priceInput');
-  const dateEl = $id('dateInput');
-  const storeEl = $id('storeInput');
-  const brandEl = $id('brandInput');
-  const notesEl = $id('notesInput');
-
-  const product = String(productEl?.value ?? '').trim();
-  const productKey = toProductKey(product);
-  const category = String(categoryEl?.value ?? 'Altro');
-  const qty = parseNumber(qtyEl?.value ?? '');
-  const unit = String(unitEl?.value ?? 'pz');
-  const price = parseNumber(priceEl?.value ?? '');
-  const date = String(dateEl?.value ?? '');
-  const store = String(storeEl?.value ?? '').trim();
-  const brand = String(brandEl?.value ?? '').trim();
-  const notes = String(notesEl?.value ?? '').trim();
-
-  return { product, productKey, category, qty, unit, price, date, store, brand, notes };
-}
-
-function validatePurchaseFields(d) {
-  if (!d.productKey) return 'Inserisci il prodotto';
-  if (!Number.isFinite(d.qty) || d.qty <= 0) return 'Quantità non valida';
-  if (!Number.isFinite(d.price) || d.price < 0) return 'Prezzo non valido';
-  if (!/^(\d{4})-(\d{2})-(\d{2})$/.test(d.date)) return 'Data non valida';
-  if (!Number.isFinite(ymdToUTCms(d.date))) return 'Data non valida';
-  return null;
-}
-
-function makePurchaseId(d) {
-  const base = `${d.productKey}|${d.date}|${d.store}|${d.brand}|${d.price}|${d.qty}|${d.unit}|${d.category}|${d.notes}`;
-  const hash = typeof crypto !== 'undefined' && crypto.subtle ? null : null;
-  // deterministic enough: use stable hash in JS
-  let h = 0;
-  for (let i=0;i<base.length;i++){
-    h = ((h<<5)-h) + base.charCodeAt(i);
-    h |= 0;
-  }
-  return `p:${d.date}:${Math.abs(h)}`;
-}
-
-async function handleRegisterSubmit(e) {
+async function addManual(e) {
   e.preventDefault();
-  const d = getRegisterFormData();
-  const err = validatePurchaseFields(d);
-  if (err) {
-    showToast(err);
-    return;
+  const name = getVal('manualName').trim().replace(/\s+/g, ' ');
+  if (!name) { toast('Inserisci il nome del prodotto', { kind: 'error' }); return; }
+  const key = keyOf(name);
+  if (state.listItems.some(i => !String(i.id).startsWith('auto:') && !i.checked && (i.productKey || keyOf(i.name)) === key)) {
+    toast('Voce già presente in lista', { kind: 'error' }); return;
   }
-  const nowIso = new Date().toISOString();
-  const purchase = {
-    id: `p:${Date.now()}:${Math.random().toString(16).slice(2)}`,
-    product: d.product,
-    productKey: d.productKey,
-    category: d.category,
-    qty: d.qty,
-    unit: d.unit,
-    price: round2(d.price),
-    date: d.date,
-    store: d.store,
-    brand: d.brand,
-    notes: d.notes,
-    receiptId: null,
-    createdAt: nowIso,
-    updatedAt: nowIso
-  };
-  const ok = await addPurchase(purchase);
-  if (!ok) return;
-  showToast('Acquisto salvato');
-  resetRegisterForm();
+  const rec = { id: 'man:' + uid(), name: name, productKey: key, category: normCat(getVal('manualCat')), checked: false, createdAt: new Date().toISOString() };
+  try { await dbWrite([{ store: 'listItems', put: rec }]); }
+  catch (err) { console.error(err); toast('Impossibile aggiungere la voce', { kind: 'error' }); return; }
+  state.listItems.push(rec);
+  setVal('manualName', '');
+  renderAll();
+  toast('Voce aggiunta');
 }
-
-function renderRecentPurchases() {
-  const host = $id('recentPurchases');
-  if (!host) return;
-  const recent = state.purchases.slice(0, 8);
-  host.innerHTML = '';
-  if (recent.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'muted';
-    empty.textContent = 'Nessun acquisto ancora.';
-    host.appendChild(empty);
-    return;
-  }
-  for (const p of recent) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.dataset.id = p.id;
-
-    const main = document.createElement('div');
-    main.className = 'row__main';
-    const title = document.createElement('div');
-    title.className = 'row__title';
-    title.textContent = p.product;
-    const meta = document.createElement('div');
-    meta.className = 'row__meta';
-    meta.textContent = `${formatDateIT(p.date)} • ${p.store || '—'} • ${formatMoneyEUR(p.price)}`;
-    main.appendChild(title);
-    main.appendChild(meta);
-
-    const actions = document.createElement('div');
-    actions.className = 'row__actions';
-    const del = document.createElement('button');
-    del.className = 'icon-btn';
-    del.type = 'button';
-    del.setAttribute('aria-label', 'Elimina');
-    del.innerHTML = buildTrashIconSvg();
-    del.addEventListener('click', async () => {
-      const body = `<div class="muted">Confermi eliminazione?</div>
-        <div class="divider"></div>
-        <div><strong>${escapeHtml(p.product)}</strong></div>
-        <div class="muted">${escapeHtml(formatDateIT(p.date))} • ${escapeHtml(formatMoneyEUR(p.price))}</div>`;
-      const res = await openModal({
-        title: 'Elimina acquisto',
-        bodyHtml: body,
-        okText: 'Elimina',
-        okClass: 'danger'
-      });
-      if (!res.ok) return;
-      const deleted = await deletePurchase(p.id);
-      if (!deleted) return;
-      showToast('Acquisto eliminato', {
-        actionText: 'Annulla',
-        ms: 5000,
-        onAction: () => { restorePurchase(deleted); }
-      });
-    }, { passive: true });
-    actions.appendChild(del);
-
-    row.appendChild(main);
-    row.appendChild(actions);
-    host.appendChild(row);
-  }
+async function deleteManual(id) {
+  const rec = state.listItems.find(i => i.id === id);
+  if (!rec) return;
+  try { await dbWrite([{ store: 'listItems', del: id }]); }
+  catch (e) { console.error(e); toast('Impossibile eliminare la voce', { kind: 'error' }); return; }
+  state.listItems = state.listItems.filter(i => i.id !== id);
+  renderAll();
+  toast('Voce eliminata', { duration: 5000, action: { label: 'Annulla', fn: () => safe(undoDeleteManual(rec)) } });
 }
-
-function renderDatalists() {
-  const prodList = $id('productsDatalist');
-  const storeList = $id('storesDatalist');
-  if (prodList) prodList.innerHTML = '';
-  if (storeList) storeList.innerHTML = '';
-
-  const products = new Map();
-  const stores = new Set();
-  for (const p of state.purchases) {
-    if (p.product) products.set(p.productKey, p.product);
-    if (p.store) stores.add(p.store);
-  }
-  if (prodList) {
-    for (const name of Array.from(products.values()).sort((a,b)=>a.localeCompare(b,'it'))) {
-      const opt = document.createElement('option');
-      opt.value = name;
-      prodList.appendChild(opt);
-    }
-  }
-  if (storeList) {
-    for (const name of Array.from(stores).sort((a,b)=>a.localeCompare(b,'it'))) {
-      const opt = document.createElement('option');
-      opt.value = name;
-      storeList.appendChild(opt);
-    }
-  }
-
-  const histStore = $id('historyStore');
-  if (histStore) {
-    const current = histStore.value;
-    histStore.innerHTML = '<option value="">Tutti</option>';
-    for (const name of Array.from(stores).sort((a,b)=>a.localeCompare(b,'it'))) {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      histStore.appendChild(opt);
-    }
-    histStore.value = current;
-  }
+async function undoDeleteManual(rec) {
+  try { await dbWrite([{ store: 'listItems', put: rec }]); }
+  catch (e) { console.error(e); toast('Impossibile ripristinare la voce', { kind: 'error' }); return; }
+  upsert(state.listItems, rec);
+  renderAll();
 }
-
-function listFilterPredicate(item) {
-  if (state.ui.listFilter === 'all') return true;
-  // needed: in ritardo/a breve + manuali
-  if (item.kind === 'manual') return true;
-  return item.status === 'In ritardo' || item.status === 'A breve';
-}
-
-function computeListView() {
-  const { items, insufficient } = computeIntervals(state.purchases);
-
-  // Auto items
-  const auto = [];
-  for (const it of items) {
-    const id = `auto:${it.productKey}`;
-    const dbItem = state.listItems.find(x => x.id === id);
-    const checked = !!dbItem?.checked;
-    const hidden = !!dbItem?.hiddenUntilPurchase;
-    auto.push({
-      kind: 'auto',
-      id,
-      productKey: it.productKey,
-      name: it.name,
-      category: it.category || 'Altro',
-      status: it.status,
-      latestDate: it.latestDate,
-      predictedDate: it.predictedDate,
-      deltaDays: it.deltaDays,
-      checked,
-      hiddenUntilPurchase: hidden,
-      cheapest: it.cheapest
-    });
-  }
-  const autoIns = insufficient.map(it => {
-    const id = `auto:${it.productKey}`;
-    const dbItem = state.listItems.find(x => x.id === id);
-    return {
-      kind: 'auto-insufficient',
-      id,
-      productKey: it.productKey,
-      name: it.name,
-      category: it.category || 'Altro',
-      latestDate: it.latestDate,
-      checked: !!dbItem?.checked,
-      hiddenUntilPurchase: !!dbItem?.hiddenUntilPurchase,
-      cheapest: it.cheapest
-    };
+async function clearChecked() {
+  const ops = [];
+  const manualIds = [];
+  const autoRecs = [];
+  state.listItems.forEach(i => {
+    if (!i.checked) return;
+    if (String(i.id).startsWith('auto:')) {
+      if (!i.hiddenUntilPurchase) {
+        const rec = { id: i.id, checked: true, hiddenUntilPurchase: true };
+        autoRecs.push(rec);
+        ops.push({ store: 'listItems', put: rec });
+      }
+    } else { manualIds.push(i.id); ops.push({ store: 'listItems', del: i.id }); }
   });
-
-  // Manual items
-  const manual = state.listItems
-    .filter(x => !String(x.id).startsWith('auto:'))
-    .map(x => ({
-      kind: 'manual',
-      id: x.id,
-      productKey: x.productKey,
-      name: x.name,
-      category: x.category || 'Altro',
-      checked: !!x.checked,
-      createdAt: x.createdAt
-    }));
-
-  // counts (only autos not hidden)
-  let late=0, soon=0, ok=0;
-  for (const it of auto) {
-    if (it.hiddenUntilPurchase) continue;
-    if (it.status === 'In ritardo') late++;
-    else if (it.status === 'A breve') soon++;
-    else ok++;
-  }
-
-  const needed = auto.filter(it => !it.hiddenUntilPurchase).filter(listFilterPredicate);
-  const manualVisible = manual.filter(listFilterPredicate);
-
-  const insufficientVisible = autoIns.filter(it => !it.hiddenUntilPurchase).filter(listFilterPredicate);
-
-  return { late, soon, ok, needed, insufficient: insufficientVisible, manual: manualVisible, allAuto: auto, allManual: manual };
+  if (!ops.length) { toast('Nessuna voce spuntata'); return; }
+  try { await dbWrite(ops); }
+  catch (e) { console.error(e); toast('Impossibile rimuovere le voci spuntate', { kind: 'error' }); return; }
+  state.listItems = state.listItems.filter(i => manualIds.indexOf(i.id) < 0);
+  autoRecs.forEach(r => upsert(state.listItems, r));
+  renderAll();
+  toast('Voci spuntate rimosse');
 }
-
-async function upsertListItem(item, toastMsgOnFail) {
-  try {
-    await dbPut(state.db, 'listItems', item);
-    const existingIdx = state.listItems.findIndex(x => x.id === item.id);
-    if (existingIdx >= 0) {
-      const arr = state.listItems.slice();
-      arr[existingIdx] = item;
-      setListItems(arr);
-    } else {
-      setListItems([...state.listItems, item]);
-    }
-    renderAll();
-    return true;
-  } catch (e) {
-    console.error(e);
-    showToast(toastMsgOnFail || 'Impossibile salvare la voce');
-    return false;
+async function saveFromList(id) {
+  let key, name, manualRec = null;
+  if (String(id).startsWith('auto:')) {
+    key = id.slice(5);
+    const l = lastPurchase(key);
+    if (!l) return;
+    name = l.product;
+  } else {
+    manualRec = state.listItems.find(i => i.id === id);
+    if (!manualRec) return;
+    name = manualRec.name;
+    key = manualRec.productKey || keyOf(name);
   }
-}
-
-function renderList() {
-  const countLate = $id('countLate');
-  const countSoon = $id('countSoon');
-  const countOk = $id('countOk');
-  const content = $id('listContent');
-  if (!content) return;
-
-  const allBtn = $id('listFilterAllBtn');
-  const needBtn = $id('listFilterNeededBtn');
-  if (allBtn && needBtn) {
-    allBtn.setAttribute('aria-pressed', state.ui.listFilter === 'all' ? 'true' : 'false');
-    needBtn.setAttribute('aria-pressed', state.ui.listFilter === 'needed' ? 'true' : 'false');
-  }
-
-  const view = computeListView();
-  if (countLate) countLate.textContent = String(view.late);
-  if (countSoon) countSoon.textContent = String(view.soon);
-  if (countOk) countOk.textContent = String(view.ok);
-
-  content.innerHTML = '';
-
-  const renderGroup = (title, items) => {
-    if (items.length === 0) return;
-    const group = document.createElement('div');
-    group.className = 'category-group';
-    const head = document.createElement('div');
-    head.className = 'category-group__head';
-    const t = document.createElement('div');
-    t.className = 'category-group__title';
-    t.textContent = title;
-    head.appendChild(t);
-    group.appendChild(head);
-
-    const body = document.createElement('div');
-    body.className = 'category-group__body';
-
-    for (const it of items) {
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.dataset.id = it.id;
-
-      const main = document.createElement('div');
-      main.className = 'row__main';
-      const name = document.createElement('div');
-      name.className = 'row__title';
-      name.textContent = it.name;
-
-      const meta = document.createElement('div');
-      meta.className = 'row__meta';
-
-      if (it.kind === 'auto') {
-        const delta = Math.round(it.deltaDays);
-        const deltaTxt = it.deltaDays < 0 ? `${Math.abs(delta)} gg di ritardo` : `${delta} gg`;
-        const cheapest = it.cheapest ? ` • Miglior negozio: ${it.cheapest.store}` : '';
-        meta.textContent = `Ultimo: ${formatDateIT(it.latestDate)} • Previsto: ${formatDateIT(it.predictedDate)} • ${deltaTxt}${cheapest}`;
-      } else if (it.kind === 'auto-insufficient') {
-        meta.textContent = `Ultimo: ${formatDateIT(it.latestDate)} • Dati insufficienti`;
-      } else {
-        meta.textContent = 'Voce manuale';
-      }
-
-      main.appendChild(name);
-      main.appendChild(meta);
-
-      const actions = document.createElement('div');
-      actions.className = 'row__actions';
-
-      if (it.kind === 'auto') {
-        const pill = document.createElement('span');
-        pill.className = 'pill ' + (it.status === 'In ritardo' ? 'pill--danger' : (it.status === 'A breve' ? 'pill--warn' : 'pill--ok'));
-        pill.textContent = it.status;
-        actions.appendChild(pill);
-      }
-
-      const chk = document.createElement('label');
-      chk.className = 'checkbox';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = !!it.checked;
-      input.addEventListener('change', async () => {
-        const nowIso = new Date().toISOString();
-        const record = (state.listItems.find(x => x.id === it.id)) || {
-          id: it.id,
-          name: it.name,
-          productKey: it.productKey,
-          category: it.category,
-          createdAt: nowIso
-        };
-        const updated = { ...record, checked: input.checked };
-        await upsertListItem(updated, 'Impossibile aggiornare la voce');
-      });
-      const span = document.createElement('span');
-      span.textContent = 'Spuntato';
-      chk.appendChild(input);
-      chk.appendChild(span);
-      actions.appendChild(chk);
-
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'btn btn-primary btn-sm';
-      saveBtn.type = 'button';
-      saveBtn.textContent = 'Salva';
-      saveBtn.addEventListener('click', async () => {
-        await openSaveFromListModal(it);
-      }, { passive: true });
-      actions.appendChild(saveBtn);
-
-      if (it.kind === 'manual') {
-        const del = document.createElement('button');
-        del.className = 'icon-btn';
-        del.type = 'button';
-        del.setAttribute('aria-label', 'Elimina voce');
-        del.innerHTML = buildTrashIconSvg();
-        del.addEventListener('click', async () => {
-          const res = await openModal({
-            title: 'Elimina voce',
-            bodyHtml: `<div><strong>${escapeHtml(it.name)}</strong></div>`,
-            okText: 'Elimina',
-            okClass: 'danger'
-          });
-          if (!res.ok) return;
-          try {
-            await dbDelete(state.db, 'listItems', it.id);
-            setListItems(state.listItems.filter(x => x.id !== it.id));
-            renderAll();
-            showToast('Voce eliminata');
-          } catch (e) {
-            console.error(e);
-            showToast('Impossibile eliminare la voce');
-          }
-        }, { passive: true });
-        actions.appendChild(del);
-      }
-
-      row.appendChild(main);
-      row.appendChild(actions);
-      body.appendChild(row);
-    }
-
-    group.appendChild(body);
-    content.appendChild(group);
-  };
-
-  const byCat = new Map();
-  for (const it of view.needed.concat(view.manual)) {
-    if (it.kind !== 'auto' && it.kind !== 'manual') continue;
-    const cat = it.category || 'Altro';
-    const arr = byCat.get(cat) || [];
-    arr.push(it);
-    byCat.set(cat, arr);
-  }
-  const cats = Array.from(byCat.keys()).sort((a,b)=>a.localeCompare(b,'it'));
-  for (const c of cats) {
-    const arr = byCat.get(c) || [];
-    renderGroup(c, arr);
-  }
-
-  if (view.insufficient.length) {
-    renderGroup('Dati insufficienti', view.insufficient);
-  }
-
-  if (content.childElementCount === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'muted';
-    empty.textContent = 'Nessuna voce da mostrare.';
-    content.appendChild(empty);
-  }
-}
-
-async function openSaveFromListModal(item) {
-  const last = item.kind === 'auto' ? getLastPurchaseForKey(item.productKey) : getLastPurchaseForKey(item.productKey);
-  const defaults = {
-    product: item.name,
-    category: item.category || 'Altro',
-    qty: 1,
-    unit: 'pz',
-    price: 0,
-    store: '',
-    brand: '',
+  const last = lastPurchase(key);
+  const v = {
+    product: last ? last.product : name,
+    category: last ? last.category : (manualRec ? manualRec.category : DEFAULT_CATEGORY),
+    qty: last ? fmtNum(last.qty) : '1',
+    unit: last ? last.unit : 'pz',
+    price: last ? fmtPrice(last.price) : '',
+    date: todayStr(),
+    store: last ? (last.store || '') : '',
+    brand: last ? (last.brand || '') : '',
     notes: ''
   };
-  const pre = last ? {
-    product: last.product,
-    category: last.category || defaults.category,
-    qty: last.qty,
-    unit: last.unit,
-    price: last.price,
-    store: last.store || '',
-    brand: last.brand || '',
-    notes: last.notes || ''
-  } : defaults;
-
-  const bodyHtml = `
-  <div class="form">
-    <div class="form-row">
-      <label class="label" for="mProduct">Prodotto<span class="req">*</span></label>
-      <input id="mProduct" class="input" type="text" value="${escapeHtml(pre.product)}">
-    </div>
-    <div class="form-row">
-      <label class="label" for="mCategory">Categoria</label>
-      <select id="mCategory" class="select">
-        ${['Frutta e verdura','Carne e pesce','Latticini','Pane e cereali','Bevande','Surgelati','Dispensa','Casa e pulizia','Igiene personale','Altro'].map(c => `<option ${c===pre.category?'selected':''}>${escapeHtml(c)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-grid">
-      <div class="form-row">
-        <label class="label" for="mQty">Quantità<span class="req">*</span></label>
-        <input id="mQty" class="input" type="text" inputmode="decimal" value="${escapeHtml(formatNumberInput(pre.qty))}">
-      </div>
-      <div class="form-row">
-        <label class="label" for="mUnit">Unità</label>
-        <select id="mUnit" class="select">
-          ${['pz','kg','g','l','ml'].map(u => `<option ${u===pre.unit?'selected':''}>${u}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-row">
-        <label class="label" for="mPrice">Prezzo totale €<span class="req">*</span></label>
-        <input id="mPrice" class="input" type="text" inputmode="decimal" value="${escapeHtml(formatNumberInput(pre.price))}">
-      </div>
-      <div class="form-row">
-        <label class="label" for="mDate">Data acquisto<span class="req">*</span></label>
-        <input id="mDate" class="input" type="date" value="${escapeHtml(todayLocalYMD())}">
-      </div>
-    </div>
-    <div class="form-row">
-      <label class="label" for="mStore">Negozio</label>
-      <input id="mStore" class="input" type="text" value="${escapeHtml(pre.store)}">
-    </div>
-    <div class="form-row">
-      <label class="label" for="mBrand">Marca</label>
-      <input id="mBrand" class="input" type="text" value="${escapeHtml(pre.brand)}">
-    </div>
-    <div class="form-row">
-      <label class="label" for="mNotes">Note</label>
-      <textarea id="mNotes" class="textarea" rows="3">${escapeHtml(pre.notes)}</textarea>
-    </div>
-  </div>`;
-
-  const validate = () => {
-    const product = String($('#mProduct', $id('modalBody'))?.value ?? '').trim();
-    const qty = parseNumber($('#mQty', $id('modalBody'))?.value ?? '');
-    const price = parseNumber($('#mPrice', $id('modalBody'))?.value ?? '');
-    const date = String($('#mDate', $id('modalBody'))?.value ?? '');
-    if (!toProductKey(product)) return 'Inserisci il prodotto';
-    if (!Number.isFinite(qty) || qty <= 0) return 'Quantità non valida';
-    if (!Number.isFinite(price) || price < 0) return 'Prezzo non valido';
-    if (!/^(\d{4})-(\d{2})-(\d{2})$/.test(date)) return 'Data non valida';
-    if (!Number.isFinite(ymdToUTCms(date))) return 'Data non valida';
-    return null;
-  };
-
-  const getValue = () => {
-    const product = String($('#mProduct', $id('modalBody'))?.value ?? '').trim();
-    const productKey = toProductKey(product);
-    const category = String($('#mCategory', $id('modalBody'))?.value ?? 'Altro');
-    const qty = parseNumber($('#mQty', $id('modalBody'))?.value ?? '');
-    const unit = String($('#mUnit', $id('modalBody'))?.value ?? 'pz');
-    const price = parseNumber($('#mPrice', $id('modalBody'))?.value ?? '');
-    const date = String($('#mDate', $id('modalBody'))?.value ?? '');
-    const store = String($('#mStore', $id('modalBody'))?.value ?? '').trim();
-    const brand = String($('#mBrand', $id('modalBody'))?.value ?? '').trim();
-    const notes = String($('#mNotes', $id('modalBody'))?.value ?? '').trim();
-    return { product, productKey, category, qty, unit, price, date, store, brand, notes };
-  };
-
-  const res = await openModal({
-    title: 'Registra acquisto',
-    bodyHtml,
-    okText: 'Salva',
-    validate,
-    getValue
+  const r = await purchaseModal('Salva acquisto', 'Salva', v);
+  if (!r.ok) return;
+  const p = makePurchase(r.value);
+  const extra = manualRec ? Object.assign({}, manualRec, { checked: true }) : { id: id, checked: true, hiddenUntilPurchase: false };
+  const ok = await storePurchase(p, [extra]);
+  if (ok) toast('Acquisto salvato');
+  else toast("Impossibile salvare l'acquisto", { kind: 'error' });
+}
+async function copyText(t) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try { await navigator.clipboard.writeText(t); return true; } catch (e) { console.error(e); }
+  }
+  const ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+function shareList() {
+  const items = getListItems().all.filter(i => !i.checked && (i.status === 'late' || i.status === 'soon' || i.status === 'manual'));
+  if (!items.length) { toast('Nessuna voce da condividere'); return; }
+  let text = 'Lista della spesa del ' + fmtDate(todayStr()) + '\n';
+  CATEGORIES.forEach(cat => {
+    const g = items.filter(i => i.category === cat);
+    if (g.length) text += '\n' + cat + '\n' + g.map(i => '- ' + i.name).join('\n') + '\n';
   });
-  if (!res.ok) return;
-
-  const d = res.value;
-  const nowIso = new Date().toISOString();
-  const purchase = {
-    id: `p:${Date.now()}:${Math.random().toString(16).slice(2)}`,
-    product: d.product,
-    productKey: d.productKey,
-    category: d.category,
-    qty: d.qty,
-    unit: d.unit,
-    price: round2(d.price),
-    date: d.date,
-    store: d.store,
-    brand: d.brand,
-    notes: d.notes,
-    receiptId: null,
-    createdAt: nowIso,
-    updatedAt: nowIso
-  };
-  const ok = await addPurchase(purchase);
-  if (!ok) return;
-
-  // mark list item checked
-  const existing = state.listItems.find(x => x.id === item.id) || {
-    id: item.id,
-    name: item.name,
-    productKey: item.productKey,
-    category: item.category || 'Altro',
-    createdAt: nowIso
-  };
-  await upsertListItem({ ...existing, checked: true }, 'Impossibile aggiornare la voce');
-  showToast('Acquisto salvato');
-}
-
-async function addManualItem() {
-  const nameEl = $id('manualItemName');
-  const catEl = $id('manualItemCategory');
-  const name = String(nameEl?.value ?? '').trim();
-  const category = String(catEl?.value ?? 'Altro');
-  if (!toProductKey(name)) {
-    showToast('Inserisci il nome della voce');
-    return;
-  }
-  const nowIso = new Date().toISOString();
-  const id = `m:${Date.now()}:${Math.random().toString(16).slice(2)}`;
-  const item = { id, name, productKey: toProductKey(name), category, checked: false, createdAt: nowIso };
-  const ok = await upsertListItem(item, 'Impossibile aggiungere la voce');
-  if (!ok) return;
-  if (nameEl) nameEl.value = '';
-  showToast('Voce aggiunta');
-}
-
-async function removeCheckedItems() {
-  const toDelete = [];
-  const toUpdate = [];
-  for (const it of state.listItems) {
-    const isAuto = String(it.id).startsWith('auto:');
-    if (!it.checked) continue;
-    if (isAuto) {
-      toUpdate.push({ ...it, hiddenUntilPurchase: true });
-    } else {
-      toDelete.push(it.id);
-    }
-  }
-  try {
-    const tx = state.db.transaction('listItems', 'readwrite');
-    const os = tx.objectStore('listItems');
-    for (const id of toDelete) os.delete(id);
-    for (const it of toUpdate) os.put(it);
-    await txDone(tx);
-    setListItems(state.listItems.filter(x => !toDelete.includes(x.id)).map(x => {
-      const u = toUpdate.find(y => y.id === x.id);
-      return u ? u : x;
-    }));
-    renderAll();
-    showToast('Operazione completata');
-  } catch (e) {
-    console.error(e);
-    showToast('Impossibile rimuovere le voci');
+  if (navigator.share) {
+    navigator.share({ title: 'Lista della spesa', text: text }).catch(e => {
+      if (e && e.name === 'AbortError') return;
+      console.error(e);
+      safe(copyText(text).then(ok => toast(ok ? 'Lista copiata negli appunti' : 'Impossibile condividere la lista', ok ? undefined : { kind: 'error' })));
+    });
+  } else {
+    safe(copyText(text).then(ok => toast(ok ? 'Lista copiata negli appunti' : 'Impossibile condividere la lista', ok ? undefined : { kind: 'error' })));
   }
 }
 
-async function shareList() {
-  const view = computeListView();
-  const lines = [];
-  for (const it of view.needed.concat(view.manual)) {
-    if (it.kind === 'auto' && it.hiddenUntilPurchase) continue;
-    if (!listFilterPredicate(it)) continue;
-    lines.push(`- ${it.name}`);
-  }
-  const text = lines.length ? `Lista da comprare:\n${lines.join('\n')}` : 'Lista da comprare: (vuota)';
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: 'Lista Spesa', text });
-      showToast('Lista condivisa');
-      return;
-    }
-  } catch (e) {
-    if (e && e.name === 'AbortError') return;
-    console.error(e);
-  }
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
-      showToast('Lista copiata negli appunti');
-      return;
-    }
-  } catch (e) {
-    console.error(e);
-  }
-  showToast(text, { ms: 7000 });
+/* ===================== STORICO ===================== */
+function cardHtml(p) {
+  const u = unitPrice(p.qty, p.unit, p.price);
+  return '<div class="pcard"><div class="pcard-top"><div><div class="row-title">' + esc(p.product) + '</div>' +
+    '<div class="row-sub">' + esc(fmtDate(p.date)) + (p.store ? ' · ' + esc(p.store) : '') + (p.brand ? ' · ' + esc(p.brand) : '') + '</div></div>' +
+    '<div class="row-price">' + esc(fmtMoney(p.price)) + '</div></div>' +
+    '<div class="row-sub">' + esc(p.category) + ' · ' + esc(fmtNum(p.qty)) + ' ' + esc(p.unit) + (u ? ' · ' + esc(fmtUnitPrice(u)) : '') + '</div>' +
+    (p.notes ? '<div class="row-sub note">' + esc(p.notes) + '</div>' : '') +
+    '<div class="pcard-actions"><button type="button" class="btn small" data-act="edit" data-id="' + esc(p.id) + '">Modifica</button>' +
+    '<button type="button" class="icon-btn" data-act="del" data-id="' + esc(p.id) + '" aria-label="Elimina acquisto">' + TRASH + '</button></div></div>';
 }
-
-/* History */
-function historyFilters() {
-  return {
-    q: String($id('historySearch')?.value ?? '').trim().toLowerCase(),
-    category: String($id('historyCategory')?.value ?? ''),
-    store: String($id('historyStore')?.value ?? ''),
-    from: String($id('historyFrom')?.value ?? ''),
-    to: String($id('historyTo')?.value ?? '')
-  };
-}
-function applyHistoryFilters(purchases, f) {
-  return purchases.filter(p => {
-    if (f.q) {
-      const hay = `${p.product||''} ${p.brand||''} ${p.notes||''}`.toLowerCase();
-      if (!hay.includes(f.q)) return false;
-    }
-    if (f.category && p.category !== f.category) return false;
-    if (f.store && (p.store || '') !== f.store) return false;
-    if (f.from && p.date < f.from) return false;
-    if (f.to && p.date > f.to) return false;
+function renderStorico() {
+  const list = $('historyList');
+  if (!list) return;
+  // opzioni negozio
+  const sel = $('h-store');
+  if (sel) {
+    const cur = sel.value;
+    const stores = new Map();
+    state.purchases.forEach(p => { if (p.store) { const k = keyOf(p.store); if (!stores.has(k)) stores.set(k, p.store); } });
+    const arr = Array.from(stores.values()).sort((a, b) => a.localeCompare(b, 'it'));
+    sel.innerHTML = '<option value="">Tutti</option>' + arr.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+    sel.value = arr.indexOf(cur) >= 0 ? cur : '';
+  }
+  const q = keyOf(getVal('h-search'));
+  const cat = getVal('h-cat');
+  const store = getVal('h-store');
+  const from = getVal('h-from');
+  const to = getVal('h-to');
+  const res = sortedPurchases().filter(p => {
+    if (q && (keyOf(p.product) + ' ' + keyOf(p.brand) + ' ' + keyOf(p.notes)).indexOf(q) < 0) return false;
+    if (cat && p.category !== cat) return false;
+    if (store && keyOf(p.store) !== keyOf(store)) return false;
+    if (from && p.date < from) return false;
+    if (to && p.date > to) return false;
     return true;
   });
+  const total = res.reduce((s, p) => s + p.price, 0);
+  const sum = $('h-summary');
+  if (sum) sum.innerHTML = '<strong>' + res.length + '</strong> ' + (res.length === 1 ? 'acquisto' : 'acquisti') + ' · Totale speso: <strong>' + esc(fmtMoney(total)) + '</strong>';
+  if (!res.length) { list.innerHTML = '<p class="muted">Nessun acquisto trovato.</p>'; return; }
+  const shown = res.slice(0, ui.storicoLimit);
+  list.innerHTML = shown.map(cardHtml).join('') +
+    (res.length > shown.length ? '<button type="button" class="btn block" data-act="more">Mostra altri</button>' : '');
+}
+function onPurchaseListClick(e) {
+  const b = e.target.closest ? e.target.closest('[data-act]') : null;
+  if (!b) return;
+  const act = b.getAttribute('data-act');
+  const id = b.getAttribute('data-id');
+  if (act === 'del') safe(askDeletePurchase(id));
+  else if (act === 'edit') safe(editPurchase(id));
+  else if (act === 'more') { ui.storicoLimit += 100; renderStorico(); }
+}
+function resetHistoryFilters() {
+  setVal('h-search', ''); setVal('h-cat', ''); setVal('h-store', ''); setVal('h-from', ''); setVal('h-to', '');
+  ui.storicoLimit = 100;
+  renderStorico();
 }
 
-async function openEditPurchaseModal(p) {
-  const bodyHtml = `
-  <div class="form">
-    <div class="form-row">
-      <label class="label" for="eProduct">Prodotto<span class="req">*</span></label>
-      <input id="eProduct" class="input" type="text" value="${escapeHtml(p.product)}">
-    </div>
-    <div class="form-row">
-      <label class="label" for="eCategory">Categoria</label>
-      <select id="eCategory" class="select">
-        ${['Frutta e verdura','Carne e pesce','Latticini','Pane e cereali','Bevande','Surgelati','Dispensa','Casa e pulizia','Igiene personale','Altro'].map(c => `<option ${c===p.category?'selected':''}>${escapeHtml(c)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-grid">
-      <div class="form-row">
-        <label class="label" for="eQty">Quantità<span class="req">*</span></label>
-        <input id="eQty" class="input" type="text" inputmode="decimal" value="${escapeHtml(formatNumberInput(p.qty))}">
-      </div>
-      <div class="form-row">
-        <label class="label" for="eUnit">Unità</label>
-        <select id="eUnit" class="select">
-          ${['pz','kg','g','l','ml'].map(u => `<option ${u===p.unit?'selected':''}>${u}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-row">
-        <label class="label" for="ePrice">Prezzo totale €<span class="req">*</span></label>
-        <input id="ePrice" class="input" type="text" inputmode="decimal" value="${escapeHtml(formatNumberInput(p.price))}">
-      </div>
-      <div class="form-row">
-        <label class="label" for="eDate">Data acquisto<span class="req">*</span></label>
-        <input id="eDate" class="input" type="date" value="${escapeHtml(p.date)}">
-      </div>
-    </div>
-    <div class="form-row">
-      <label class="label" for="eStore">Negozio</label>
-      <input id="eStore" class="input" type="text" value="${escapeHtml(p.store||'')}">
-    </div>
-    <div class="form-row">
-      <label class="label" for="eBrand">Marca</label>
-      <input id="eBrand" class="input" type="text" value="${escapeHtml(p.brand||'')}">
-    </div>
-    <div class="form-row">
-      <label class="label" for="eNotes">Note</label>
-      <textarea id="eNotes" class="textarea" rows="3">${escapeHtml(p.notes||'')}</textarea>
-    </div>
-  </div>`;
-
-  const validate = () => {
-    const product = String($('#eProduct', $id('modalBody'))?.value ?? '').trim();
-    const qty = parseNumber($('#eQty', $id('modalBody'))?.value ?? '');
-    const price = parseNumber($('#ePrice', $id('modalBody'))?.value ?? '');
-    const date = String($('#eDate', $id('modalBody'))?.value ?? '');
-    if (!toProductKey(product)) return 'Inserisci il prodotto';
-    if (!Number.isFinite(qty) || qty <= 0) return 'Quantità non valida';
-    if (!Number.isFinite(price) || price < 0) return 'Prezzo non valido';
-    if (!/^(\d{4})-(\d{2})-(\d{2})$/.test(date)) return 'Data non valida';
-    if (!Number.isFinite(ymdToUTCms(date))) return 'Data non valida';
-    return null;
-  };
-
-  const getValue = () => {
-    const product = String($('#eProduct', $id('modalBody'))?.value ?? '').trim();
-    const productKey = toProductKey(product);
-    const category = String($('#eCategory', $id('modalBody'))?.value ?? 'Altro');
-    const qty = parseNumber($('#eQty', $id('modalBody'))?.value ?? '');
-    const unit = String($('#eUnit', $id('modalBody'))?.value ?? 'pz');
-    const price = parseNumber($('#ePrice', $id('modalBody'))?.value ?? '');
-    const date = String($('#eDate', $id('modalBody'))?.value ?? '');
-    const store = String($('#eStore', $id('modalBody'))?.value ?? '').trim();
-    const brand = String($('#eBrand', $id('modalBody'))?.value ?? '').trim();
-    const notes = String($('#eNotes', $id('modalBody'))?.value ?? '').trim();
-    return { product, productKey, category, qty, unit, price, date, store, brand, notes };
-  };
-
-  const res = await openModal({
-    title: 'Modifica acquisto',
-    bodyHtml,
-    okText: 'Salva',
-    validate,
-    getValue
-  });
-  if (!res.ok) return;
-
-  const d = res.value;
-  const updated = {
-    ...p,
-    product: d.product,
-    productKey: d.productKey,
-    category: d.category,
-    qty: d.qty,
-    unit: d.unit,
-    price: round2(d.price),
-    date: d.date,
-    store: d.store,
-    brand: d.brand,
-    notes: d.notes,
-    updatedAt: new Date().toISOString()
-  };
-  try {
-    await dbPut(state.db, 'purchases', updated);
-    setPurchases([updated, ...state.purchases.filter(x => x.id !== updated.id)]);
-    renderAll();
-    showToast('Acquisto salvato');
-  } catch (e) {
-    console.error(e);
-    showToast('Impossibile salvare le modifiche');
-  }
-}
-
-function renderHistory() {
-  const host = $id('historyList');
-  const countEl = $id('historyCount');
-  const totalEl = $id('historyTotal');
-  if (!host) return;
-
-  const filtered = applyHistoryFilters(state.purchases, historyFilters());
-  host.innerHTML = '';
-  let total = 0;
-  for (const p of filtered) total += Number(p.price) || 0;
-
-  if (countEl) countEl.textContent = String(filtered.length);
-  if (totalEl) totalEl.textContent = formatMoneyEUR(round2(total));
-
-  if (filtered.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'muted';
-    empty.textContent = 'Nessun acquisto corrispondente.';
-    host.appendChild(empty);
-    return;
-  }
-
-  for (const p of filtered) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.dataset.id = p.id;
-
-    const title = document.createElement('div');
-    title.className = 'row__title';
-    title.textContent = p.product;
-
-    const meta = document.createElement('div');
-    meta.className = 'row__meta';
-    const up = unitPrice(p.price, p.qty, p.unit);
-    const upTxt = Number.isFinite(up) ? `${formatMoneyEUR(round2(up))}/${unitBase(p.unit)}` : '—';
-    meta.textContent = `${formatDateIT(p.date)} • ${p.store || '—'} • ${formatMoneyEUR(p.price)} • ${upTxt}`;
-
-    const actions = document.createElement('div');
-    actions.className = 'form-actions';
-    const edit = document.createElement('button');
-    edit.className = 'btn btn-ghost';
-    edit.type = 'button';
-    edit.textContent = 'Modifica';
-    edit.addEventListener('click', async () => { await openEditPurchaseModal(p); }, { passive: true });
-
-    const del = document.createElement('button');
-    del.className = 'icon-btn';
-    del.type = 'button';
-    del.setAttribute('aria-label', 'Elimina');
-    del.innerHTML = buildTrashIconSvg();
-    del.addEventListener('click', async () => {
-      const body = `<div class="muted">Confermi eliminazione?</div>
-        <div class="divider"></div>
-        <div><strong>${escapeHtml(p.product)}</strong></div>
-        <div class="muted">${escapeHtml(formatDateIT(p.date))} • ${escapeHtml(formatMoneyEUR(p.price))}</div>`;
-      const res = await openModal({
-        title: 'Elimina acquisto',
-        bodyHtml: body,
-        okText: 'Elimina',
-        okClass: 'danger'
-      });
-      if (!res.ok) return;
-      const deleted = await deletePurchase(p.id);
-      if (!deleted) return;
-      showToast('Acquisto eliminato', {
-        actionText: 'Annulla',
-        ms: 5000,
-        onAction: () => { restorePurchase(deleted); }
-      });
-    }, { passive: true });
-
-    actions.appendChild(edit);
-    actions.appendChild(del);
-
-    card.appendChild(title);
-    card.appendChild(meta);
-    card.appendChild(actions);
-    host.appendChild(card);
-  }
-}
-
-/* Backup & settings */
-function backupObject() {
-  return {
-    app: 'spesa-smart',
-    schema: 1,
-    exportedAt: new Date().toISOString(),
-    purchases: state.purchases.slice(),
-    listItems: state.listItems.slice(),
-    settings: Array.from(state.settings.entries()).map(([key,value]) => ({ key, value })),
-    synonyms: state.synonyms.slice()
-  };
-}
-
-function validateBackup(obj) {
-  if (!obj || typeof obj !== 'object') return { ok: false, reason: 'Formato non valido' };
-  if (obj.app !== 'spesa-smart') return { ok: false, reason: 'App non valida' };
-  if (obj.schema !== 1) return { ok: false, reason: 'Schema non valido' };
-  const arrays = ['purchases','listItems','settings','synonyms'];
-  for (const k of arrays) if (!Array.isArray(obj[k])) return { ok:false, reason:`Campo ${k} non valido` };
-  return { ok:true };
-}
-
-function isValidPurchaseRecord(p) {
-  if (!p || typeof p !== 'object') return false;
-  const req = ['id','product','productKey','category','qty','unit','price','date','store','brand','notes','receiptId','createdAt','updatedAt'];
-  for (const k of req) if (!(k in p)) return false;
-  if (!String(p.id)) return false;
-  if (!String(p.productKey)) return false;
-  if (!Number.isFinite(Number(p.qty))) return false;
-  if (!Number.isFinite(Number(p.price))) return false;
-  if (!/^(\d{4})-(\d{2})-(\d{2})$/.test(String(p.date))) return false;
-  return true;
-}
-function isValidListItemRecord(x) {
-  if (!x || typeof x !== 'object') return false;
-  if (!('id' in x)) return false;
-  if (!String(x.id)) return false;
-  if (String(x.id).startsWith('auto:')) {
-    if (!('checked' in x)) return false;
-    if (!('hiddenUntilPurchase' in x)) return false;
-  } else {
-    if (!('name' in x)) return false;
-    if (!('productKey' in x)) return false;
-    if (!('category' in x)) return false;
-    if (!('checked' in x)) return false;
-    if (!('createdAt' in x)) return false;
-  }
-  return true;
-}
-function isValidSettingRecord(x) {
-  return x && typeof x === 'object' && typeof x.key === 'string';
-}
-function isValidSynRecord(x) {
-  return x && typeof x === 'object' && typeof x.alias === 'string';
-}
-
-async function exportBackup() {
-  // v5: update lastBackupAt only after user actually completes export; AbortError must not change anything.
-  const prevSettings = await dbGetAll('settings');
-  const prev = (prevSettings || []).find(s => s && s.key === 'lastBackupAt');
-  const prevValue = prev ? prev.value : null;
-
-  const nowIso = new Date().toISOString();
-
-  // Prepare settings snapshot with updated lastBackupAt (but do not persist yet)
-  const settingsAll = await dbGetAll('settings');
-  const settingsOut = (settingsAll || []).filter(r => r && r.key !== 'lastBackupAt');
-  settingsOut.push({ key: 'lastBackupAt', value: nowIso });
-
-  const backup = {
-    app: 'spesa-smart',
-    schema: 1,
-    exportedAt: nowIso,
-    purchases: await dbGetAll('purchases'),
-    listItems: await dbGetAll('listItems'),
-    settings: settingsOut,
-    synonyms: await dbGetAll('synonyms')
-  };
-  const json = JSON.stringify(backup, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const fileName = `spesa-smart-backup-${nowIso.slice(0,10)}.json`;
-
-  let exported = false;
-  try {
-    if (navigator.share && navigator.canShare) {
-      const file = new File([blob], fileName, { type: 'application/json' });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Backup Spesa Smart' });
-        exported = true;
-      } else {
-        await downloadBlob(blob, fileName);
-        exported = true;
-      }
-    } else {
-      await downloadBlob(blob, fileName);
-      exported = true;
-    }
-  } catch (err) {
-    if (err && err.name === 'AbortError') {
-      exported = false;
-    } else {
-      try {
-        await downloadBlob(blob, fileName);
-        exported = true;
-      } catch (e2) {
-        exported = false;
-      }
-    }
-  }
-
-  if (exported) {
-    await dbPut('settings', { key: 'lastBackupAt', value: nowIso });
-    await renderAll();
-    showToast('Backup esportato');
-  } else {
-    if (prevValue === null || prevValue === undefined) {
-      await dbDelete('settings', 'lastBackupAt');
-    } else {
-      await dbPut('settings', { key: 'lastBackupAt', value: prevValue });
-    }
-  }
-}
-
-function exportCsv() {
-  const header = ['id','prodotto','categoria','quantita','unita','prezzo_totale','data','negozio','marca','note'];
-  const lines = [header.map(csvEscapeField).join(';')];
-  for (const p of state.purchases.slice().reverse()) {
-    const row = [
-      p.id,
-      p.product,
-      p.category,
-      formatNumberInput(p.qty),
-      p.unit,
-      formatNumberInput(p.price),
-      p.date,
-      p.store,
-      p.brand,
-      p.notes
-    ];
-    lines.push(row.map(csvEscapeField).join(';'));
-  }
-  const bom = '\ufeff';
-  const csv = bom + lines.join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const ymd = todayLocalYMD();
+/* ===================== BACKUP / IMPORT / CSV ===================== */
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `spesa-smart-${ymd}.csv`;
+  a.href = url; a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  showToast('CSV esportato');
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
-
-async function importBackupFile(file, mode) {
-  let text = '';
+async function exportBackup() {
   try {
-    text = await file.text();
+    const now = new Date().toISOString();
+    const settingsArr = Object.keys(state.settings).filter(k => k !== 'lastBackupAt').map(k => ({ key: k, value: state.settings[k] }));
+    settingsArr.push({ key: 'lastBackupAt', value: now });
+    const data = { app: 'spesa-smart', schema: 1, exportedAt: now, purchases: state.purchases, listItems: state.listItems,
+      settings: settingsArr, synonyms: state.synonyms };
+    const json = JSON.stringify(data, null, 2);
+    const name = 'spesa-smart-backup-' + todayStr() + '.json';
+    let done = false;
+    try {
+      const file = new File([json], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'Backup Spesa Smart' }); done = true; }
+        catch (e) {
+          if (e && e.name === 'AbortError') { toast('Esportazione annullata'); return; }
+          console.error(e);
+        }
+      }
+    } catch (e) { console.error(e); }
+    if (!done) downloadBlob(new Blob([json], { type: 'application/json' }), name);
+    await setSetting('lastBackupAt', now);
+    toast('Backup esportato');
   } catch (e) {
     console.error(e);
-    showToast('Impossibile leggere il file');
-    return;
+    toast('Impossibile esportare il backup', { kind: 'error' });
   }
-  let obj = null;
+}
+function exportCsv() {
   try {
-    obj = JSON.parse(text);
-  } catch (e) {
-    showToast('File JSON non valido');
-    return;
-  }
-  const v = validateBackup(obj);
-  if (!v.ok) {
-    showToast(v.reason);
-    return;
-  }
-
-  const validPurchases = [];
-  let discardedPurchases = 0;
-  for (const p of obj.purchases) {
-    if (isValidPurchaseRecord(p)) validPurchases.push(p);
-    else discardedPurchases++;
-  }
-  const validListItems = [];
-  let discardedList = 0;
-  for (const x of obj.listItems) {
-    if (isValidListItemRecord(x)) validListItems.push(x);
-    else discardedList++;
-  }
-  const validSettings = [];
-  let discardedSettings = 0;
-  for (const x of obj.settings) {
-    if (isValidSettingRecord(x)) validSettings.push(x);
-    else discardedSettings++;
-  }
-  const validSyn = [];
-  let discardedSyn = 0;
-  for (const x of obj.synonyms) {
-    if (isValidSynRecord(x)) validSyn.push(x);
-    else discardedSyn++;
-  }
-
-  if (mode === 'replace') {
-    const confirm1 = await openModal({
-      title: 'Sostituisci dati',
-      bodyHtml: '<div class="muted">Questa operazione sostituisce tutti i dati presenti.</div>',
-      okText: 'Continua',
-      okClass: 'danger'
+    const q = v => {
+      const s = String(v === null || v === undefined ? '' : v);
+      return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const n = v => String(v).replace('.', ',');
+    const rows = [['Data', 'Prodotto', 'Categoria', 'Quantità', 'Unità', 'Prezzo totale', 'Prezzo unitario', 'Unità prezzo', 'Negozio', 'Marca', 'Note'].join(';')];
+    state.purchases.slice().sort((a, b) => -cmpPurchase(a, b)).forEach(p => {
+      const u = unitPrice(p.qty, p.unit, p.price);
+      rows.push([fmtDate(p.date), q(p.product), q(p.category), n(p.qty), p.unit, n(p.price.toFixed(2)),
+        u ? n(u.value.toFixed(2)) : '', u ? u.label : '', q(p.store), q(p.brand), q(p.notes)].join(';'));
     });
-    if (!confirm1.ok) return;
-  }
-
-  try {
-    if (mode === 'replace') {
-      await dbClear(state.db, 'purchases');
-      await dbClear(state.db, 'listItems');
-      await dbClear(state.db, 'settings');
-      await dbClear(state.db, 'synonyms');
-      const tx = state.db.transaction(['purchases','listItems','settings','synonyms'], 'readwrite');
-      const osP = tx.objectStore('purchases');
-      const osL = tx.objectStore('listItems');
-      const osS = tx.objectStore('settings');
-      const osY = tx.objectStore('synonyms');
-      for (const p of validPurchases) osP.put(p);
-      for (const x of validListItems) osL.put(x);
-      for (const x of validSettings) osS.put(x);
-      for (const x of validSyn) osY.put(x);
-      await txDone(tx);
-      setPurchases(validPurchases);
-      setListItems(validListItems);
-      state.settings = new Map(validSettings.map(x => [x.key, x.value]));
-      state.synonyms = validSyn.slice();
-      renderAll();
-      showToast(`Import completato. Acquisti: ${validPurchases.length} (scartati ${discardedPurchases})`);
-      return;
-    }
-
-    // merge
-    const existingP = new Map(state.purchases.map(p => [p.id, p]));
-    for (const p of validPurchases) existingP.set(p.id, p);
-    const mergedP = Array.from(existingP.values());
-    const existingL = new Map(state.listItems.map(x => [x.id, x]));
-    for (const x of validListItems) existingL.set(x.id, x);
-    const mergedL = Array.from(existingL.values());
-    const existingS = new Map(Array.from(state.settings.entries()).map(([k,v]) => [k, v]));
-    for (const s of validSettings) existingS.set(s.key, s.value);
-    const mergedS = Array.from(existingS.entries()).map(([key,value]) => ({ key, value }));
-    const mergedSyn = state.synonyms.slice(); // keep current (synonyms unused)
-    for (const x of validSyn) mergedSyn.push(x);
-
-    const tx = state.db.transaction(['purchases','listItems','settings','synonyms'], 'readwrite');
-    const osP = tx.objectStore('purchases');
-    const osL = tx.objectStore('listItems');
-    const osS = tx.objectStore('settings');
-    const osY = tx.objectStore('synonyms');
-    for (const p of mergedP) osP.put(p);
-    for (const x of mergedL) osL.put(x);
-    for (const x of mergedS) osS.put(x);
-    for (const x of mergedSyn) osY.put(x);
-    await txDone(tx);
-
-    setPurchases(mergedP);
-    setListItems(mergedL);
-    state.settings = new Map(mergedS.map(x => [x.key, x.value]));
-    state.synonyms = mergedSyn.slice();
-    renderAll();
-    showToast(`Import completato. Acquisti: ${validPurchases.length} (scartati ${discardedPurchases})`);
+    const blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    downloadBlob(blob, 'spesa-smart-acquisti-' + todayStr() + '.csv');
+    toast('CSV esportato');
   } catch (e) {
     console.error(e);
-    showToast('Impossibile importare il backup');
+    toast("Impossibile esportare il CSV", { kind: 'error' });
   }
 }
-
-function updateBackupBanner() {
-  const banner = $id('backupBanner');
-  const textEl = $id('backupBannerText');
-  if (!banner || !textEl) return;
-  const dismissed = sessionStorage.getItem('backupBannerDismissed') === '1';
-  if (dismissed) { banner.hidden = true; return; }
-
-  const days = Number(getSetting('backupReminderDays', 7));
-  if (!Number.isFinite(days) || days <= 0) { banner.hidden = true; return; }
-  if (state.purchases.length === 0) { banner.hidden = true; return; }
-
-  const last = getSetting('lastBackupAt', null);
-  if (!last) {
-    textEl.textContent = 'Non risulta alcun backup. Esporta ora.';
-    banner.hidden = false;
-    return;
+function validateBackup(obj) {
+  if (!obj || typeof obj !== 'object' || obj.app !== 'spesa-smart') return { error: 'File non valido: non è un backup di Spesa Smart' };
+  if (obj.schema !== 1) return { error: 'Versione del backup non supportata' };
+  const arr = x => Array.isArray(x) ? x : [];
+  const now = new Date().toISOString();
+  const res = { purchases: [], listItems: [], settings: [], synonyms: [], discarded: 0 };
+  const seen = { purchases: new Set(), listItems: new Set(), settings: new Set(), synonyms: new Set() };
+  const isStr = s => typeof s === 'string' && s.trim() !== '';
+  arr(obj.purchases).forEach(r => {
+    if (!r || !isStr(r.id) || !isStr(r.product) || typeof r.qty !== 'number' || !(r.qty > 0) || !isFinite(r.qty) ||
+      typeof r.price !== 'number' || !(r.price >= 0) || !isFinite(r.price) || !isValidDate(r.date) ||
+      UNITS.indexOf(r.unit) < 0 || seen.purchases.has(r.id)) { res.discarded++; return; }
+    seen.purchases.add(r.id);
+    const product = r.product.trim().replace(/\s+/g, ' ');
+    res.purchases.push({
+      id: r.id, product: product, productKey: keyOf(product), category: normCat(r.category), qty: r.qty, unit: r.unit,
+      price: round2(r.price), date: r.date, store: typeof r.store === 'string' ? r.store : '',
+      brand: typeof r.brand === 'string' ? r.brand : '', notes: typeof r.notes === 'string' ? r.notes : '',
+      receiptId: r.receiptId === undefined ? null : r.receiptId,
+      createdAt: isStr(r.createdAt) ? r.createdAt : now, updatedAt: isStr(r.updatedAt) ? r.updatedAt : now
+    });
+  });
+  arr(obj.listItems).forEach(r => {
+    if (!r || !isStr(r.id) || seen.listItems.has(r.id)) { res.discarded++; return; }
+    if (r.id.startsWith('auto:')) {
+      seen.listItems.add(r.id);
+      res.listItems.push({ id: r.id, checked: !!r.checked, hiddenUntilPurchase: !!r.hiddenUntilPurchase });
+    } else if (isStr(r.name)) {
+      seen.listItems.add(r.id);
+      res.listItems.push({ id: r.id, name: r.name.trim(), productKey: keyOf(r.name), category: normCat(r.category),
+        checked: !!r.checked, createdAt: isStr(r.createdAt) ? r.createdAt : now });
+    } else res.discarded++;
+  });
+  arr(obj.settings).forEach(r => {
+    if (!r || !isStr(r.key) || seen.settings.has(r.key)) { res.discarded++; return; }
+    seen.settings.add(r.key);
+    res.settings.push({ key: r.key, value: r.value });
+  });
+  arr(obj.synonyms).forEach(r => {
+    if (!r || !isStr(r.alias) || !isStr(r.productKey) || seen.synonyms.has(r.alias)) { res.discarded++; return; }
+    seen.synonyms.add(r.alias);
+    res.synonyms.push({ alias: r.alias, productKey: r.productKey });
+  });
+  return res;
+}
+async function handleImportFile(file) {
+  let obj;
+  try { obj = JSON.parse(await file.text()); }
+  catch (e) { console.error(e); toast('File non valido: JSON non leggibile', { kind: 'error' }); return; }
+  const data = validateBackup(obj);
+  if (data.error) { toast(data.error, { kind: 'error' }); return; }
+  const total = data.purchases.length + data.listItems.length + data.settings.length + data.synonyms.length;
+  if (!total) { toast('Il backup non contiene record validi', { kind: 'error' }); return; }
+  const r = await openModal({
+    title: 'Importa backup',
+    body: '<p>Il file contiene <strong>' + data.purchases.length + '</strong> acquisti, <strong>' + data.listItems.length +
+      '</strong> voci di lista e <strong>' + data.settings.length + '</strong> impostazioni' +
+      (data.discarded ? ' (' + data.discarded + ' record non validi scartati)' : '') + '.</p>' +
+      '<label class="radio-row"><input type="radio" name="mode" value="merge" checked> Unisci ai dati esistenti</label>' +
+      '<label class="radio-row"><input type="radio" name="mode" value="replace"> Sostituisci tutti i dati</label>',
+    okLabel: 'Importa',
+    collect: box => { const c = box.querySelector('input[name="mode"]:checked'); return c ? c.value : 'merge'; }
+  });
+  if (!r.ok) return;
+  const mode = r.value;
+  if (mode === 'replace') {
+    const ok = await confirmBox('Sostituire tutti i dati?', '<p>I dati attuali verranno cancellati e sostituiti con quelli del backup.</p>', 'Sostituisci', true);
+    if (!ok) return;
   }
-  const lastDate = new Date(last);
-  if (!Number.isFinite(lastDate.getTime())) {
-    textEl.textContent = 'Backup non valido. Esporta ora.';
-    banner.hidden = false;
-    return;
-  }
-  const diff = (Date.now() - lastDate.getTime()) / 86400000;
-  if (diff >= days) {
-    textEl.textContent = `Ultimo backup: ${lastDate.toLocaleDateString('it-IT')}. Esporta ora.`;
-    banner.hidden = false;
+  const ops = [];
+  let added = 0, existing = 0;
+  if (mode === 'replace') {
+    STORES.forEach(s => ops.push({ store: s, clear: true }));
+    data.purchases.forEach(x => ops.push({ store: 'purchases', put: x }));
+    data.listItems.forEach(x => ops.push({ store: 'listItems', put: x }));
+    data.settings.forEach(x => ops.push({ store: 'settings', put: x }));
+    data.synonyms.forEach(x => ops.push({ store: 'synonyms', put: x }));
+    added = total;
   } else {
-    banner.hidden = true;
+    const have = {
+      purchases: new Set(state.purchases.map(x => x.id)),
+      listItems: new Set(state.listItems.map(x => x.id)),
+      settings: new Set(Object.keys(state.settings)),
+      synonyms: new Set(state.synonyms.map(x => x.alias))
+    };
+    const add = (store, arrIn, idKey) => arrIn.forEach(x => {
+      if (have[store].has(x[idKey])) { existing++; return; }
+      have[store].add(x[idKey]);
+      ops.push({ store: store, put: x });
+      added++;
+    });
+    add('purchases', data.purchases, 'id');
+    add('listItems', data.listItems, 'id');
+    add('settings', data.settings, 'key');
+    add('synonyms', data.synonyms, 'alias');
   }
-}
-
-async function wipeAllData() {
-  const c1 = await openModal({
-    title: 'Elimina tutti i dati',
-    bodyHtml: '<div class="muted">Questa operazione elimina tutti i dati dal database.</div>',
-    okText: 'Continua',
-    okClass: 'danger'
-  });
-  if (!c1.ok) return;
-
-  let inputEl = null;
-  const res = await openModal({
-    title: 'Conferma eliminazione',
-    bodyHtml: `<div class="muted">Scrivi <strong>ELIMINA</strong> per confermare.</div>
-      <div class="form-row" style="margin-top:12px;">
-        <input id="wipeConfirmInput" class="input" type="text" inputmode="text" placeholder="ELIMINA">
-      </div>`,
-    okText: 'Elimina',
-    okClass: 'danger',
-    validate: () => {
-      inputEl = $('#wipeConfirmInput', $id('modalBody'));
-      const v = String(inputEl?.value ?? '');
-      if (v !== 'ELIMINA') return 'Il testo non corrisponde';
-      return null;
-    },
-    getValue: () => {
-      inputEl = $('#wipeConfirmInput', $id('modalBody'));
-      return String(inputEl?.value ?? '');
-    }
-  });
-  if (!res.ok) return;
-
   try {
-    await dbClear(state.db, 'purchases');
-    await dbClear(state.db, 'listItems');
-    await dbClear(state.db, 'settings');
-    await dbClear(state.db, 'synonyms');
-    setPurchases([]);
-    setListItems([]);
-    state.settings = new Map();
-    state.synonyms = [];
-    renderAll();
-    showToast('Dati eliminati');
+    await dbWrite(ops);
+    await reloadState();
   } catch (e) {
     console.error(e);
-    showToast('Impossibile eliminare i dati');
+    toast('Impossibile importare il backup', { kind: 'error' });
+    try { await reloadState(); } catch (x) { console.error(x); }
+    renderAll();
+    return;
   }
+  renderAll();
+  toast(mode === 'replace'
+    ? 'Importati ' + added + ' record' + (data.discarded ? ' (' + data.discarded + ' scartati)' : '')
+    : 'Importati ' + added + ' nuovi record, ' + existing + ' già presenti' + (data.discarded ? ', ' + data.discarded + ' scartati' : ''),
+    { duration: 4500 });
 }
 
-/* Demo data */
-function deterministicId(prefix, seed) {
-  let h = 0;
-  for (let i=0;i<seed.length;i++){ h = ((h<<5)-h) + seed.charCodeAt(i); h|=0; }
-  return `${prefix}:${Math.abs(h)}`;
+/* ===================== DEMO ===================== */
+const DEMO_STORES = [{ n: 'Esselunga', f: 1.0 }, { n: 'Coop', f: 1.0 }, { n: 'Lidl', f: 0.9 }, { n: 'Conad', f: 1.05 }, { n: 'Carrefour', f: 0.97 }];
+const DEMO_PRODUCTS = [
+  { name: 'Latte intero', cat: 'Latticini', qty: 1, unit: 'l', price: 1.35, every: 6 },
+  { name: 'Uova', cat: 'Latticini', qty: 6, unit: 'pz', price: 2.6, every: 14 },
+  { name: 'Yogurt greco', cat: 'Latticini', qty: 2, unit: 'pz', price: 2.4, every: 10 },
+  { name: 'Mozzarella', cat: 'Latticini', qty: 3, unit: 'pz', price: 2.3, every: 12 },
+  { name: 'Parmigiano Reggiano', cat: 'Latticini', qty: 0.25, unit: 'kg', price: 5.2, every: 21 },
+  { name: 'Pane', cat: 'Pane e cereali', qty: 0.5, unit: 'kg', price: 2.1, every: 4 },
+  { name: 'Pasta spaghetti', cat: 'Pane e cereali', qty: 1, unit: 'kg', price: 1.4, every: 15 },
+  { name: 'Riso', cat: 'Pane e cereali', qty: 1, unit: 'kg', price: 2.3, every: 30 },
+  { name: 'Biscotti', cat: 'Pane e cereali', qty: 0.5, unit: 'kg', price: 2.5, every: 20 },
+  { name: 'Banane', cat: 'Frutta e verdura', qty: 1, unit: 'kg', price: 1.9, every: 7 },
+  { name: 'Mele', cat: 'Frutta e verdura', qty: 1.5, unit: 'kg', price: 2.8, every: 9 },
+  { name: 'Insalata', cat: 'Frutta e verdura', qty: 1, unit: 'pz', price: 1.2, every: 6 },
+  { name: 'Pomodori', cat: 'Frutta e verdura', qty: 0.8, unit: 'kg', price: 2.6, every: 8 },
+  { name: 'Patate', cat: 'Frutta e verdura', qty: 2, unit: 'kg', price: 2.9, every: 16 },
+  { name: 'Petto di pollo', cat: 'Carne e pesce', qty: 0.6, unit: 'kg', price: 6.5, every: 10 },
+  { name: 'Salmone', cat: 'Carne e pesce', qty: 0.3, unit: 'kg', price: 7.2, every: 25 },
+  { name: 'Macinato di manzo', cat: 'Carne e pesce', qty: 0.5, unit: 'kg', price: 5.4, every: 14 },
+  { name: 'Acqua naturale', cat: 'Bevande', qty: 6, unit: 'l', price: 2.2, every: 10 },
+  { name: 'Succo di frutta', cat: 'Bevande', qty: 1, unit: 'l', price: 1.8, every: 18 },
+  { name: 'Caffè', cat: 'Dispensa', qty: 0.25, unit: 'kg', price: 3.6, every: 28 },
+  { name: 'Olio extravergine', cat: 'Dispensa', qty: 1, unit: 'l', price: 7.9, every: 45 },
+  { name: 'Passata di pomodoro', cat: 'Dispensa', qty: 2, unit: 'pz', price: 1.8, every: 20 },
+  { name: 'Piselli surgelati', cat: 'Surgelati', qty: 0.45, unit: 'kg', price: 1.9, every: 26 },
+  { name: 'Gelato', cat: 'Surgelati', qty: 0.5, unit: 'l', price: 3.4, every: 30 },
+  { name: 'Detersivo piatti', cat: 'Casa e pulizia', qty: 1, unit: 'pz', price: 2.1, every: 40 },
+  { name: 'Carta igienica', cat: 'Casa e pulizia', qty: 1, unit: 'pz', price: 4.5, every: 30 },
+  { name: 'Dentifricio', cat: 'Igiene personale', qty: 1, unit: 'pz', price: 2.3, every: 60 },
+  { name: 'Shampoo', cat: 'Igiene personale', qty: 1, unit: 'pz', price: 3.1, every: 50 }
+];
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
 }
-function addDaysYMD(ymd, days) {
-  const ms = ymdToUTCms(ymd);
-  const d = new Date(ms + days*86400000);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth()+1).padStart(2,'0');
-  const da = String(d.getUTCDate()).padStart(2,'0');
-  return `${y}-${m}-${da}`;
-}
-
-async function loadDemoData() {
-  const ok = await confirmModal({
-    title: 'Carica dati demo',
-    message: 'Verranno inseriti acquisti demo (senza duplicati se già presenti). Confermi?'
+function buildDemo() {
+  const rnd = mulberry32(20260101);
+  const today = dayNum(todayStr());
+  const start = today - 182;
+  const out = [];
+  DEMO_PRODUCTS.forEach(d => {
+    const pref = DEMO_STORES[Math.floor(rnd() * DEMO_STORES.length)];
+    const end = today - Math.floor(rnd() * d.every * 1.3);
+    let t = start + Math.floor(rnd() * d.every);
+    const slug = keyOf(d.name).replace(/[^a-z0-9]+/g, '-');
+    while (t <= end) {
+      const st = rnd() < 0.6 ? pref : DEMO_STORES[Math.floor(rnd() * DEMO_STORES.length)];
+      const price = round2(d.price * st.f * (0.92 + rnd() * 0.16));
+      const date = ymdFromDayNum(t);
+      const iso = date + 'T12:00:00.000Z';
+      out.push({ id: 'demo-' + slug + '-' + date, product: d.name, productKey: keyOf(d.name), category: d.cat, qty: d.qty,
+        unit: d.unit, price: price, date: date, store: st.n, brand: '', notes: '', receiptId: null, createdAt: iso, updatedAt: iso });
+      t += Math.max(1, Math.round(d.every * (0.8 + rnd() * 0.4)));
+    }
   });
+  return out;
+}
+async function loadDemo() {
+  const ok = await confirmBox('Caricare i dati demo?', '<p>Verranno aggiunti circa 6 mesi di acquisti di esempio. Eventuali dati demo già presenti saranno sostituiti. I tuoi dati non vengono toccati.</p>', 'Carica');
   if (!ok) return;
+  const demo = buildDemo();
+  const ops = [];
+  state.purchases.forEach(p => { if (String(p.id).startsWith('demo-')) ops.push({ store: 'purchases', del: p.id }); });
+  demo.forEach(p => ops.push({ store: 'purchases', put: p }));
+  try { await dbWrite(ops); await reloadState(); }
+  catch (e) { console.error(e); toast('Impossibile caricare i dati demo', { kind: 'error' }); try { await reloadState(); } catch (x) { console.error(x); } renderAll(); return; }
+  renderAll();
+  toast('Caricati ' + demo.length + ' acquisti demo');
+}
 
-  const products = [
-    ['Pasta', 'Alimentari', 'kg'],
-    ['Riso', 'Alimentari', 'kg'],
-    ['Latte', 'Alimentari', 'l'],
-    ['Pane', 'Alimentari', 'pz'],
-    ['Uova', 'Alimentari', 'pz'],
-    ['Yogurt', 'Alimentari', 'pz'],
-    ['Pomodori', 'Ortofrutta', 'kg'],
-    ['Mele', 'Ortofrutta', 'kg'],
-    ['Banane', 'Ortofrutta', 'kg'],
-    ['Insalata', 'Ortofrutta', 'pz'],
-    ['Patate', 'Ortofrutta', 'kg'],
-    ['Cipolle', 'Ortofrutta', 'kg'],
-    ['Pollo', 'Carne', 'kg'],
-    ['Manzo', 'Carne', 'kg'],
-    ['Prosciutto', 'Salumi', 'kg'],
-    ['Tonno', 'Alimentari', 'pz'],
-    ['Olio EVO', 'Alimentari', 'l'],
-    ['Passata', 'Alimentari', 'pz'],
-    ['Caffè', 'Alimentari', 'pz'],
-    ['Acqua', 'Bevande', 'l'],
-    ['Succo', 'Bevande', 'l'],
-    ['Birra', 'Bevande', 'l'],
-    ['Detersivo', 'Casa', 'pz'],
-    ['Carta igienica', 'Casa', 'pz'],
-    ['Sapone', 'Casa', 'pz'],
-    ['Shampoo', 'Cura persona', 'pz'],
-    ['Dentifricio', 'Cura persona', 'pz'],
-    ['Formaggio', 'Latticini', 'kg'],
-    ['Burro', 'Latticini', 'pz'],
-    ['Gelato', 'Surgelati', 'pz'],
-  ];
-  const stores = ['Esselunga','Coop','Lidl','Conad','Carrefour'];
+/* ===================== ELIMINA TUTTO ===================== */
+async function wipeAll() {
+  const ok1 = await confirmBox('Eliminare tutti i dati?', '<p>Verranno eliminati definitivamente acquisti, lista e impostazioni salvati su questo telefono.</p>', 'Continua', true);
+  if (!ok1) return;
+  const r = await openModal({
+    title: 'Conferma finale',
+    body: '<p>Per confermare scrivi <strong>ELIMINA</strong>.</p><label class="field"><input name="confirm" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>',
+    okLabel: 'Elimina tutto',
+    danger: true,
+    validate: box => { const e = box.querySelector('[name="confirm"]'); return e && e.value.trim() === 'ELIMINA' ? null : 'Scrivi ELIMINA per confermare'; },
+    collect: () => true,
+    onOpen: box => { const e = box.querySelector('[name="confirm"]'); if (e) e.focus(); }
+  });
+  if (!r.ok) return;
+  try { await dbWrite(STORES.map(s => ({ store: s, clear: true }))); }
+  catch (e) { console.error(e); toast('Impossibile eliminare i dati', { kind: 'error' }); return; }
+  state.purchases = []; state.listItems = []; state.synonyms = []; state.settings = {};
+  ui.bannerDismissed = false; ui.listFilter = 'all';
+  resetHistoryFilters();
+  resetRegForm();
+  renderAll();
+  toast('Tutti i dati sono stati eliminati');
+}
 
-  const today = new Date();
-  function ymdDaysAgo(days) {
-    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-    d.setUTCDate(d.getUTCDate() - days);
-    return d.toISOString().slice(0,10);
-  }
-
-  const purchases=[];
-  for (let pi=0; pi<products.length; pi++) {
-    const [name, category, unit] = products[pi];
-    const productKey = normalizeProductKey(name);
-    for (let i=0;i<6;i++) {
-      const daysAgo = 7 + (pi*3 + i*17) % 170;
-      const date = ymdDaysAgo(daysAgo);
-      const store = stores[(pi+i)%stores.length];
-      const qty = unit==='pz' ? 1+((pi+i)%3) : (unit==='l'? 1 : 0.5 + ((pi+i)%5)*0.25);
-      const price = unit==='pz' ? 1.2*qty + (pi%5)*0.2 : 2.0*qty + (pi%7)*0.3;
-      purchases.push({
-        id: `demo-${productKey}-${i}`,
-        createdAt: `demo-${productKey}-${i}`,
-        date,
-        product: name,
-        productKey,
-        category,
-        brand: '',
-        store,
-        qty: round3(qty),
-        unit,
-        price: round2(price),
-        notes: ''
-      });
+/* ===================== IMPOSTAZIONI ===================== */
+function renderBanner() {
+  const b = $('backupBanner');
+  if (!b) return;
+  const days = Number(getSetting('backupReminderDays', 7));
+  const last = getSetting('lastBackupAt', null);
+  let due = false, txt = '';
+  if (days > 0 && state.purchases.length > 0 && !ui.bannerDismissed) {
+    const t = last ? new Date(last).getTime() : NaN;
+    if (!last || isNaN(t)) { due = true; txt = 'Non hai ancora fatto un backup dei tuoi dati.'; }
+    else {
+      const el = Math.floor((Date.now() - t) / 86400000);
+      if (el >= days) { due = true; txt = 'Ultimo backup: ' + el + (el === 1 ? ' giorno fa.' : ' giorni fa.'); }
     }
   }
-
-  for (const p of purchases) {
-    await dbPut('purchases', p);
-  }
-
-  await rebuildAutoListItemsFromPurchases();
-  await renderAll();
-  showToast('Dati demo caricati');
+  setText('backupBannerText', txt);
+  b.hidden = !due;
 }
-
-/* Storage info */
+function updateInstallUi() {
+  const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const btn = $('btnInstall');
+  const help = $('installHelp');
+  if (btn) btn.hidden = !deferredInstall || standalone;
+  if (help) help.hidden = !!deferredInstall || standalone;
+}
 async function updateStorageInfo() {
-  const status = $id('storageStatusText');
-  const estimate = $id('storageEstimateText');
-  if (status) status.textContent = 'Stato: —';
-  if (estimate) estimate.textContent = 'Spazio: —';
   try {
+    const btn = $('btnPersist');
     if (navigator.storage && navigator.storage.persisted) {
       const p = await navigator.storage.persisted();
-      if (status) status.textContent = `Stato: ${p ? 'persistente' : 'non persistente'}`;
-    } else if (status) {
-      status.textContent = 'Stato: API non disponibile';
-    }
-  } catch (e) {
-    console.error(e);
-  }
-  try {
-    if (navigator.storage && navigator.storage.estimate) {
-      const est = await navigator.storage.estimate();
-      const used = est.usage || 0;
-      const quota = est.quota || 0;
-      const fmt = (n) => {
-        const v = Number(n);
-        if (!Number.isFinite(v)) return '—';
-        const mb = v/1024/1024;
-        return new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 }).format(mb) + ' MB';
-      };
-      if (estimate) estimate.textContent = `Spazio: ${fmt(used)} / ${fmt(quota)}`;
-    } else if (estimate) {
-      estimate.textContent = 'Spazio: API non disponibile';
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function requestPersistentStorage() {
-  try {
-    if (navigator.storage && navigator.storage.persist) {
-      await navigator.storage.persist();
-      await updateStorageInfo();
-      showToast('Richiesta inviata');
+      setText('storageState', p ? 'Archiviazione persistente: attiva' : 'Archiviazione persistente: non attiva');
+      if (btn) btn.hidden = !!p;
     } else {
-      showToast('API non disponibile');
+      setText('storageState', 'Archiviazione persistente: non supportata');
+      if (btn) btn.hidden = true;
     }
-  } catch (e) {
-    console.error(e);
-    showToast('Impossibile richiedere');
-  }
+    if (navigator.storage && navigator.storage.estimate) {
+      const e = await navigator.storage.estimate();
+      setText('storageUsage', 'Spazio usato: ' + fmtBytes(e.usage || 0) + (e.quota ? ' di ' + fmtBytes(e.quota) : ''));
+    }
+  } catch (e) { console.error(e); }
 }
-
-function renderAll() {
-  renderDatalists();
-  renderRecentPurchases();
-  renderList();
-  renderHistory();
-  updateBackupBanner();
-  updateLastBackupText();
+function renderImpostazioni() {
+  const last = getSetting('lastBackupAt', null);
+  setText('lastBackupText', 'Ultimo backup: ' + (last && fmtDateTime(last) ? fmtDateTime(last) : 'mai'));
+  setText('appVersion', String(VERSION));
+  const sel = $('backupDays');
+  if (sel) sel.value = String(Number(getSetting('backupReminderDays', 7)));
+  updateInstallUi();
   updateStorageInfo();
 }
 
-function updateLastBackupText() {
-  const el = $id('lastBackupText');
-  if (!el) return;
-  const last = getSetting('lastBackupAt', null);
-  if (!last) { el.textContent = 'Ultimo backup: mai'; return; }
-  const d = new Date(last);
-  if (!Number.isFinite(d.getTime())) { el.textContent = 'Ultimo backup: non valido'; return; }
-  el.textContent = `Ultimo backup: ${d.toLocaleDateString('it-IT')}`;
+/* ===================== RENDER ===================== */
+function renderAll() {
+  [renderDatalists, renderRecent, refreshRegHints, renderLista, renderStorico, renderImpostazioni, renderBanner].forEach(fn => {
+    try { fn(); } catch (e) { console.error(e); }
+  });
 }
 
-/* Wiring */
+/* ===================== INIZIALIZZAZIONE ===================== */
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  updateInstallUi();
+});
+window.addEventListener('appinstalled', () => { deferredInstall = null; updateInstallUi(); });
+
+function fillSelect(id, html, value) {
+  const s = $(id);
+  if (!s) return;
+  s.innerHTML = html;
+  if (value !== undefined) s.value = value;
+}
+function bindEvents() {
+  on('formRegistra', 'submit', e => safe(onRegSubmit(e)));
+  ['input', 'change'].forEach(evt => {
+    on('f-product', evt, () => { maybePrefill(); refreshRegHints(); });
+    on('f-qty', evt, refreshRegHints);
+    on('f-unit', evt, refreshRegHints);
+    on('f-price', evt, refreshRegHints);
+  });
+  on('recentList', 'click', onPurchaseListClick);
+  on('historyList', 'click', onPurchaseListClick);
+
+  on('manualForm', 'submit', e => safe(addManual(e)));
+  on('listFilter', 'click', e => {
+    const b = e.target.closest ? e.target.closest('[data-filter]') : null;
+    if (!b) return;
+    ui.listFilter = b.getAttribute('data-filter') === 'buy' ? 'buy' : 'all';
+    renderLista();
+  });
+  on('btnShare', 'click', shareList);
+  on('btnClearChecked', 'click', () => safe(clearChecked()));
+  const lc = $('listContainer');
+  if (lc) {
+    lc.addEventListener('change', e => {
+      const t = e.target;
+      if (t && t.matches && t.matches('input[data-act="check"]')) {
+        const row = t.closest('[data-id]');
+        if (row) safe(toggleCheck(row.getAttribute('data-id'), t.checked));
+      }
+    });
+    lc.addEventListener('click', e => {
+      const b = e.target.closest ? e.target.closest('button[data-act]') : null;
+      if (!b) return;
+      const row = b.closest('[data-id]');
+      if (!row) return;
+      const id = row.getAttribute('data-id');
+      const act = b.getAttribute('data-act');
+      if (act === 'save') safe(saveFromList(id));
+      else if (act === 'delmanual') safe(deleteManual(id));
+    });
+  }
+
+  ['h-search', 'h-cat', 'h-store', 'h-from', 'h-to'].forEach(id => {
+    on(id, 'input', () => { ui.storicoLimit = 100; renderStorico(); });
+    on(id, 'change', () => { ui.storicoLimit = 100; renderStorico(); });
+  });
+  on('h-reset', 'click', resetHistoryFilters);
+
+  on('btnExport', 'click', () => safe(exportBackup()));
+  on('bannerExport', 'click', () => safe(exportBackup()));
+  on('bannerClose', 'click', () => { ui.bannerDismissed = true; renderBanner(); });
+  on('btnImport', 'click', () => { const f = $('importFile'); if (f) f.click(); });
+  on('importFile', 'change', e => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (f) safe(handleImportFile(f));
+  });
+  on('btnCsv', 'click', exportCsv);
+  on('backupDays', 'change', e => safe(setSetting('backupReminderDays', Number(e.target.value))));
+  on('btnPersist', 'click', () => {
+    safe((async () => {
+      if (!navigator.storage || !navigator.storage.persist) { toast('Archiviazione persistente non supportata', { kind: 'error' }); return; }
+      const ok = await navigator.storage.persist();
+      toast(ok ? 'Archiviazione persistente attivata' : 'Richiesta non accettata dal browser');
+      updateStorageInfo();
+    })());
+  });
+  on('btnInstall', 'click', () => {
+    safe((async () => {
+      if (!deferredInstall) return;
+      deferredInstall.prompt();
+      try { await deferredInstall.userChoice; } catch (e) { console.error(e); }
+      deferredInstall = null;
+      updateInstallUi();
+    })());
+  });
+  on('btnDemo', 'click', () => safe(loadDemo()));
+  on('btnWipe', 'click', () => safe(wipeAll()));
+}
 async function init() {
-  const dateEl = $id('dateInput');
-  if (dateEl) dateEl.value = todayLocalYMD();
-
+  const catHtml = optionsHtml(CATEGORIES, DEFAULT_CATEGORY);
+  fillSelect('f-category', catHtml, DEFAULT_CATEGORY);
+  fillSelect('manualCat', catHtml, DEFAULT_CATEGORY);
+  fillSelect('f-unit', optionsHtml(UNITS, 'pz'), 'pz');
+  fillSelect('h-cat', '<option value="">Tutte</option>' + optionsHtml(CATEGORIES, ''), '');
+  setVal('f-date', todayStr());
+  setVal('f-qty', '1');
+  bindEvents();
   try {
-    state.db = await openDb();
-  } catch (e) {
-    console.error(e);
-    showToast('Impossibile aprire il database');
-    return;
-  }
-
-  try {
-    const [purchases, listItems, settings, synonyms] = await Promise.all([
-      dbGetAll(state.db, 'purchases'),
-      dbGetAll(state.db, 'listItems'),
-      dbGetAll(state.db, 'settings'),
-      dbGetAll(state.db, 'synonyms')
-    ]);
-    setPurchases(purchases);
-    setListItems(listItems);
-    state.settings = new Map(settings.map(x => [x.key, x.value]));
-    state.synonyms = synonyms.slice();
+    await reloadState();
   } catch (e) {
     console.error(e);
   }
-
-  // defaults
-  if (!state.settings.has('backupReminderDays')) {
-    state.settings.set('backupReminderDays', 7);
-    dbPut(state.db, 'settings', { key: 'backupReminderDays', value: 7 }).catch(() => {});
-  }
-  if (!state.settings.has('listFilter')) {
-    state.settings.set('listFilter', 'all');
-    dbPut(state.db, 'settings', { key: 'listFilter', value: 'all' }).catch(() => {});
-  }
-  state.ui.listFilter = String(getSetting('listFilter', 'all')) === 'needed' ? 'needed' : 'all';
-
-  const form = $id('purchaseForm');
-  if (form) form.addEventListener('submit', handleRegisterSubmit);
-
-  const qtyEl = $id('qtyInput');
-  const unitEl = $id('unitSelect');
-  const priceEl = $id('priceInput');
-  const prodEl = $id('productInput');
-  if (qtyEl) qtyEl.addEventListener('input', updateRegisterUnitPrice);
-  if (unitEl) unitEl.addEventListener('change', () => {
-    state.ui.registerPrefillTouched.unit = true;
-    updateRegisterUnitPrice();
-  });
-  if (priceEl) priceEl.addEventListener('input', updateRegisterUnitPrice);
-  if (prodEl) prodEl.addEventListener('input', () => {
-    updateRegisterLastPurchase();
-    updateRegisterUnitPrice();
-  });
-  const catEl = $id('categorySelect');
-  const brandEl = $id('brandInput');
-  if (catEl) catEl.addEventListener('change', () => { state.ui.registerPrefillTouched.category = true; });
-  if (brandEl) brandEl.addEventListener('input', () => { state.ui.registerPrefillTouched.brand = true; });
-
-  const allBtn = $id('listFilterAllBtn');
-  const needBtn = $id('listFilterNeededBtn');
-  if (allBtn) allBtn.addEventListener('click', async () => {
-    state.ui.listFilter = 'all';
-    await setSetting('listFilter', 'all');
-  });
-  if (needBtn) needBtn.addEventListener('click', async () => {
-    state.ui.listFilter = 'needed';
-    await setSetting('listFilter', 'needed');
-  });
-
-  const addManualBtn = $id('addManualItemBtn');
-  if (addManualBtn) addManualBtn.addEventListener('click', addManualItem, { passive: true });
-
-  const shareBtn = $id('shareListBtn');
-  if (shareBtn) shareBtn.addEventListener('click', shareList, { passive: true });
-
-  const removeCheckedBtn = $id('removeCheckedBtn');
-  if (removeCheckedBtn) removeCheckedBtn.addEventListener('click', removeCheckedItems, { passive: true });
-
-  const resetFiltersBtn = $id('resetHistoryFiltersBtn');
-  if (resetFiltersBtn) resetFiltersBtn.addEventListener('click', () => {
-    const s = $id('historySearch'); if (s) s.value = '';
-    const c = $id('historyCategory'); if (c) c.value = '';
-    const st = $id('historyStore'); if (st) st.value = '';
-    const f = $id('historyFrom'); if (f) f.value = '';
-    const t = $id('historyTo'); if (t) t.value = '';
-    renderAll();
-  }, { passive: true });
-
-  for (const id of ['historySearch','historyCategory','historyStore','historyFrom','historyTo']) {
-    const el = $id(id);
-    if (el) el.addEventListener('input', () => renderAll());
-    if (el) el.addEventListener('change', () => renderAll());
-  }
-
-  const exportBackupBtn = $id('exportBackupBtn');
-  if (exportBackupBtn) exportBackupBtn.addEventListener('click', exportBackup, { passive: true });
-
-  const importBtn = $id('importBackupBtn');
-  const importInput = $id('importFileInput');
-  if (importBtn && importInput) {
-    importBtn.addEventListener('click', async () => {
-      const body = `
-        <div class="form">
-          <div class="form-row">
-            <label class="label" for="impMode">Modalità</label>
-            <select id="impMode" class="select">
-              <option value="merge">Unisci</option>
-              <option value="replace">Sostituisci</option>
-            </select>
-          </div>
-          <div class="muted">Dopo aver scelto, seleziona il file JSON.</div>
-        </div>`;
-      const res = await openModal({
-        title: 'Importa backup',
-        bodyHtml: body,
-        okText: 'Scegli file',
-        getValue: () => String($('#impMode', $id('modalBody'))?.value ?? 'merge')
-      });
-      if (!res.ok) return;
-      importBtn.dataset.mode = res.value;
-      importInput.value = '';
-      importInput.click();
-    });
-    importInput.addEventListener('change', async () => {
-      const file = importInput.files && importInput.files[0];
-      if (!file) return;
-      const mode = importBtn.dataset.mode === 'replace' ? 'replace' : 'merge';
-      await importBackupFile(file, mode);
-    });
-  }
-
-  const exportCsvBtn = $id('exportCsvBtn');
-  if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportCsv, { passive: true });
-
-  const backupReminder = $id('backupReminderSelect');
-  if (backupReminder) {
-    backupReminder.value = String(getSetting('backupReminderDays', 7));
-    backupReminder.addEventListener('change', async () => {
-      const v = Number(backupReminder.value);
-      await setSetting('backupReminderDays', Number.isFinite(v) ? v : 7);
-    });
-  }
-
-  const bannerExportBtn = $id('backupBannerExportBtn');
-  const bannerDismissBtn = $id('backupBannerDismissBtn');
-  if (bannerExportBtn) bannerExportBtn.addEventListener('click', exportBackup, { passive: true });
-  if (bannerDismissBtn) bannerDismissBtn.addEventListener('click', () => {
-    sessionStorage.setItem('backupBannerDismissed', '1');
-    updateBackupBanner();
-  }, { passive: true });
-
-  const persistBtn = $id('persistStorageBtn');
-  if (persistBtn) persistBtn.addEventListener('click', requestPersistentStorage, { passive: true });
-
-  const loadDemoBtn = $id('loadDemoBtn');
-  if (loadDemoBtn) loadDemoBtn.addEventListener('click', loadDemoData, { passive: true });
-
-  const wipeBtn = $id('wipeAllBtn');
-  if (wipeBtn) wipeBtn.addEventListener('click', wipeAllData, { passive: true });
-
   renderAll();
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  init().catch((e) => { console.error(e); });
-});
-
-/* Test surface */
-window.__spesaTest = {
-  VERSION,
-  parseNumber,
-  formatNumberInput,
-  unitPrice,
-  unitBase,
-  qtyToBase,
-  computePriceBadge,
-  computeIntervals,
-  computeStoreCheapest,
-  formatDateIT,
-  escapeHtml,
-  csvEscapeField,
-  validateBackup,
-  isValidPurchaseRecord,
-  isValidListItemRecord,
-  isValidSettingRecord,
-  backupObject,
-  diffDaysUTC,
-  ymdToUTCms
-};
+function start() { init().catch(e => console.error(e)); }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+else start();

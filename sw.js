@@ -1,12 +1,11 @@
-/* Spesa Smart service worker v4 */
-const VERSION = 4;
-const CACHE_NAME = `spesa-smart-v${VERSION}`;
-const PRECACHE_URLS = [
+'use strict';
+const VERSION = 6;
+const CACHE = 'spesa-smart-v' + VERSION;
+const FILES = [
   './',
   './index.html',
-  './sw.js',
-  './css/style.css?v=5',
-  './js/app.js?v=5',
+  './css/style.css?v=' + VERSION,
+  './js/app.js?v=' + VERSION,
   './manifest.webmanifest',
   './reset.html',
   './icons/icon-192.png',
@@ -14,83 +13,57 @@ const PRECACHE_URLS = [
   './icons/icon-maskable-512.png'
 ];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(PRECACHE_URLS.map(u => new Request(u, { cache: 'reload' })));
-    await self.skipWaiting();
-  })());
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(FILES.map(u => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.map((k) => {
-      if (k === CACHE_NAME) return Promise.resolve();
-      if (!k.startsWith('spesa-smart-')) return Promise.resolve();
-      return caches.delete(k);
-    }));
-    await self.clients.claim();
-  })());
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k.indexOf('spesa-smart-') === 0 && k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
 
-const isNavigation = (req) => req.mode === 'navigate' || (req.destination === 'document');
+function isStatic(url) {
+  return /\/icons\/|manifest\.webmanifest$/.test(url.pathname);
+}
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', event => {
   const req = event.request;
-  if (!req || req.method !== 'GET') return;
+  if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  const dest = req.destination;
-
-  // Icons & manifest: cache first
-  if (dest === 'image' || url.pathname.endsWith('.png') || url.pathname.endsWith('.webmanifest')) {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(req, { ignoreSearch: true });
-      if (cached) return cached;
-      try {
-        const res = await fetch(req);
-        if (res && res.ok) cache.put(req, res.clone());
-        return res;
-      } catch (e) {
-        if (cached) return cached;
-        throw e;
-      }
-    })());
+  if (isStatic(url)) {
+    // icone e manifest: prima la cache
+    event.respondWith(
+      caches.match(req, { ignoreSearch: true }).then(hit => {
+        if (hit) return hit;
+        return fetch(req).then(res => {
+          if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+          return res;
+        });
+      })
+    );
     return;
   }
 
-  // HTML/JS/CSS: network first, fallback to cache when offline
-  if (dest === 'document' || dest === 'script' || dest === 'style' || isNavigation(req) || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html')) {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
-      try {
-        const res = await fetch(req);
-        if (res && res.ok) cache.put(req, res.clone());
-        return res;
-      } catch (e) {
-        const cached = await cache.match(req, { ignoreSearch: true });
-        if (cached) return cached;
-        if (isNavigation(req)) {
-          const fallback = await cache.match('./index.html',
-  './sw.js', { ignoreSearch: true });
-          if (fallback) return fallback;
-        }
-        throw e;
-      }
-    })());
-    return;
-  }
-
-  // default: cache first, then network
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req, { ignoreSearch: true });
-    if (cached) return cached;
-    const res = await fetch(req);
-    if (res && res.ok) cache.put(req, res.clone());
-    return res;
-  })());
+  // HTML, JS, CSS: prima la rete, poi la cache
+  event.respondWith(
+    fetch(req).then(res => {
+      if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+      return res;
+    }).catch(() =>
+      caches.match(req, { ignoreSearch: true }).then(hit => {
+        if (hit) return hit;
+        if (req.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      })
+    )
+  );
 });
