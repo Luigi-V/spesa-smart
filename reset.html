@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>Reset - Spesa Smart v5</title>
+  <link rel="stylesheet" href="./css/style.css?v=4">
+</head>
+<body>
+  <main class="app-main" role="main">
+    <section class="section" aria-label="Reset">
+      <div class="card">
+        <h1 class="card-title">Reset cache e service worker</h1>
+        <p class="muted">
+          Questa pagina rimuove service worker e cache dell'app. I dati in IndexedDB non vengono toccati.
+        </p>
+        <div id="resetStatus" class="hint">Operazione in corso…</div>
+        <div class="form-actions">
+          <a id="openAppLink" class="btn btn-primary" href="./" hidden>Apri l'app</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  (async () => {
+    const statusEl = document.getElementById('resetStatus');
+    const openLink = document.getElementById('openAppLink');
+    const setStatus = (t) => { if (statusEl) statusEl.textContent = t; };
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) {
+          try { await r.unregister(); } catch (e) { console.error(e); }
+        }
+      }
+      if (window.caches && caches.keys) {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          try { await caches.delete(k); } catch (e) { console.error(e); }
+        }
+      }
+      setStatus('Completato. Puoi riaprire l’app.');
+      if (openLink) openLink.hidden = false;
+    } catch (err) {
+      console.error(err);
+      setStatus('Impossibile completare il reset. Controlla la console.');
+      if (openLink) openLink.hidden = false;
+    }
+  })();
+  </script>
+</body>
+</html>
